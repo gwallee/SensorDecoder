@@ -163,7 +163,7 @@
     </div>
     <div class="inputrow">
       <div class="field">
-        <input id="pn" placeholder="Type a part number… e.g. QS18VN6LV" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+        <input id="pn" placeholder="Part number, e.g. QS18VN6LV" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
         <button class="clearbtn" id="clearbtn" aria-label="Clear">✕</button>
       </div>
       <button class="scanbtn" id="scanopen">
@@ -833,7 +833,7 @@ function render(){
   // Decode first — decodeFuzzy repairs OCR/typo prefixes such as QSI8 → QS18, which
   // a prefix test on the raw text would reject before it ever got a chance.
   const {res, used} = decodeFuzzy(q);
-  if(res && res.ok){ renderResult(res, used); return; }
+  if(res && res.ok){ renderResult(res, used, q); return; }
   // keyword search mode if it doesn't look like a PN
   if(!/^(QS18|QS30|S18|Q4X|Q5X|Q3X|Q2X|Q20)/i.test(q.replace(/\s+/g,''))){
     renderSearch(q); return;
@@ -846,13 +846,14 @@ function lightTile(l){
   return '<div class="tile light-'+l.kind+'"><div class="k">Light source</div><div class="v">'+esc(l.label)+'</div><div class="d">'+esc(l.detail)+'</div></div>';
 }
 
-function renderResult(r, q){
+function renderResult(r, q, typed){
   const compact = q.toUpperCase().replace(/\s+/g,'');
-  const known = KNOWN.has(compact);
   // Banner prints the cable-length suffix with a space: "QS18VP6LP W/30"
-  const norm = compact.replace(/(W\/\d+)$/,' $1');
+  const norm = compact.replace(/(W\/?\d+)$/,' $1');
+  const known = KNOWN.has(norm) || KNOWN.has(compact);
   let html = '<div class="card">';
-  if(norm !== q.toUpperCase().trim()) html += '<div class="fixedpn">Read as <b>'+esc(norm)+'</b></div>';
+  // say so when the fuzzy pass repaired what was typed or scanned
+  if(typed && norm !== typed.toUpperCase().trim().replace(/\s+/g,' ')) html += '<div class="fixedpn">Read as <b>'+esc(norm)+'</b></div>';
   html += '<div class="famline"><span class="famname">'+esc(r.fam.famName)+'</span>';
   html += known ? '<span class="badge ok">✓ catalog model</span>' : '<span class="badge gen">decoded from nomenclature</span>';
   html += '</div><div class="famdesc">'+esc(r.fam.famDesc)+'</div>';
@@ -937,13 +938,14 @@ const modelList = document.getElementById('modellist');
 const modelSearch = document.getElementById('modelsearch');
 function renderModelList(){
   const f = modelSearch.value.toLowerCase().split(/\s+/).filter(Boolean);
-  const items = [];
+  const items = []; let matched = 0;
   for(const k of Array.from(KNOWN).sort()){
     const desc = describeShort(k);
     if(f.length && !f.every(t=>(k+' '+desc).toLowerCase().includes(t))) continue;
-    items.push('<button class="modelitem" data-pn="'+esc(k)+'"><b>'+esc(k)+'</b><span>'+esc(desc)+'</span></button>');
-    if(items.length>=60) break;
+    matched++;
+    if(items.length<60) items.push('<button class="modelitem" data-pn="'+esc(k)+'"><b>'+esc(k)+'</b><span>'+esc(desc)+'</span></button>');
   }
+  if(matched>items.length) items.push('<div class="findercount">Showing the first '+items.length+' of '+matched+' — type to narrow it down.</div>');
   modelList.innerHTML = items.join('') || '<div class="empty">No matches.</div>';
 }
 modelSearch.addEventListener('input', renderModelList);
@@ -1074,8 +1076,10 @@ function renderFinder(){
   }
   renderPatternHint();
   const pns = findMatches(finderState);
-  document.getElementById('findercount').textContent = pns.length + ' matching catalog model' + (pns.length===1?'':'s');
-  document.getElementById('finderresults').innerHTML = pns.slice(0,50).map(p=>
+  const shown = pns.slice(0,50);
+  document.getElementById('findercount').textContent = pns.length + ' matching catalog model' + (pns.length===1?'':'s')
+    + (pns.length>shown.length ? ' — showing the first '+shown.length : '');
+  document.getElementById('finderresults').innerHTML = shown.map(p=>
     '<button class="modelitem" data-pn="'+esc(p)+'"><b>'+esc(p)+'</b><span>'+esc(describeShort(p))+'</span></button>').join('');
 }
 document.addEventListener('click', e=>{
