@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#111418">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PN Decoder">
+<title>Banner Sensor PN Decoder</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#ffffff; --ink:#15181d; --ink2:#5a6472; --line:#e3e6ea;
+    --accent:#ffb800; --accent-ink:#3a2e00;
+    --laser:#d92f2f; --laser-bg:#fdeaea;
+    --ir:#7a4fd3; --ir-bg:#f1ebfc;
+    --red:#e06a10; --red-bg:#fdf0e4;
+    --us:#0f7fa8; --us-bg:#e4f4fa;
+    --unk:#5a6472; --unk-bg:#eef0f3;
+    --ok:#1e8e4e; --warn:#b95000; --warn-bg:#fff3e8;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1216; --card:#191e25; --ink:#eef1f5; --ink2:#98a3b1; --line:#2a323c;
+      --accent:#ffb800; --accent-ink:#3a2e00;
+      --laser:#ff6b6b; --laser-bg:#3a1d1d;
+      --ir:#b394f2; --ir-bg:#2a2140;
+      --red:#ffa050; --red-bg:#3a2a18;
+      --us:#5cc4e8; --us-bg:#15303c;
+      --unk:#98a3b1; --unk-bg:#232a33;
+      --ok:#4ecb7f; --warn:#ffb173; --warn-bg:#3a2a18;
+    }
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:560px; margin:0 auto; padding:0 14px 60px;}
+  header{position:sticky; top:0; z-index:10; background:var(--bg);
+    padding:calc(env(safe-area-inset-top,0px) + 12px) 0 10px;}
+  .brand{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+  .logo{width:34px;height:34px;border-radius:8px;background:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--accent-ink);font-size:15px;}
+  .brand h1{font-size:17px;margin:0;font-weight:700;}
+  .brand .sub{font-size:12px;color:var(--ink2);margin-top:1px;}
+  .inputrow{display:flex; gap:8px;}
+  .field{flex:1; position:relative;}
+  input#pn{width:100%; font-size:19px; font-weight:600; letter-spacing:.5px;
+    padding:13px 38px 13px 14px; border-radius:14px; border:1.5px solid var(--line);
+    background:var(--card); color:var(--ink); outline:none; text-transform:uppercase;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  input#pn:focus{border-color:var(--accent);}
+  input#pn::placeholder{ text-transform:none; font-family:inherit; font-weight:400; font-size:15px; letter-spacing:0;}
+  .clearbtn{position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    border:0; background:var(--unk-bg); color:var(--ink2); width:26px;height:26px;border-radius:50%;
+    font-size:14px; display:none; align-items:center; justify-content:center;}
+  .scanbtn{border:0; border-radius:14px; background:var(--accent); color:var(--accent-ink);
+    font-weight:700; font-size:14px; padding:0 16px; display:flex; align-items:center; gap:7px;}
+  .scanbtn svg{width:19px;height:19px;}
+  .hint{font-size:12px; color:var(--ink2); margin:8px 2px 0;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:16px;
+    padding:16px; margin-top:14px;}
+  .famline{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;}
+  .famname{font-weight:700; font-size:15px;}
+  .badge{font-size:11px; font-weight:700; padding:3px 8px; border-radius:20px;}
+  .badge.ok{background:color-mix(in srgb, var(--ok) 15%, transparent); color:var(--ok);}
+  .badge.gen{background:var(--unk-bg); color:var(--ink2);}
+  .famdesc{font-size:12.5px; color:var(--ink2); margin-bottom:12px; line-height:1.45;}
+  .tiles{display:grid; grid-template-columns:1fr; gap:8px;}
+  @media(min-width:400px){ .tiles{grid-template-columns:1fr 1fr;} .tile.mode{grid-column:1 / -1;} }
+  .tile{border-radius:13px; padding:11px 13px; background:var(--unk-bg); border:1px solid transparent;}
+  .tile .k{font-size:10.5px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; opacity:.75; margin-bottom:3px;}
+  .tile .v{font-size:17px; font-weight:750; line-height:1.25;}
+  .tile .d{font-size:12px; margin-top:2px; opacity:.8;}
+  .tile.mode{background:color-mix(in srgb, var(--accent) 14%, var(--card)); border-color:color-mix(in srgb, var(--accent) 40%, transparent);}
+  .tile.light-laser{background:var(--laser-bg); color:var(--laser);}
+  .tile.light-ir{background:var(--ir-bg); color:var(--ir);}
+  .tile.light-red{background:var(--red-bg); color:var(--red);}
+  .tile.light-us{background:var(--us-bg); color:var(--us);}
+  .tile.light-unk{background:var(--unk-bg); color:var(--ink2);}
+  .rows{margin-top:12px; border-top:1px solid var(--line);}
+  .row{display:flex; justify-content:space-between; gap:14px; padding:9px 2px; border-bottom:1px solid var(--line); font-size:13.5px;}
+  .row .rk{color:var(--ink2); flex:0 0 auto;}
+  .row .rv{text-align:right; font-weight:550;}
+  .warnbox{margin-top:12px; background:var(--warn-bg); color:var(--warn);
+    border-radius:12px; padding:10px 12px; font-size:13px; line-height:1.45;}
+  .segs{display:flex; flex-wrap:wrap; gap:6px; margin-top:13px;}
+  .seg{background:var(--unk-bg); border-radius:10px; padding:6px 9px; font-size:12px; line-height:1.3;}
+  .seg b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; display:block;}
+  .seg span{color:var(--ink2); font-size:11px;}
+  .empty{ text-align:center; color:var(--ink2); padding:34px 20px; font-size:14px; line-height:1.6;}
+  .empty .big{font-size:38px; margin-bottom:8px;}
+  .sugg h3, .listwrap h3{font-size:13px; margin:0 0 8px; color:var(--ink2); font-weight:650;}
+  .suggitem, .modelitem{display:block; width:100%; text-align:left; border:1px solid var(--line);
+    background:var(--card); border-radius:12px; padding:10px 12px; margin-bottom:7px; color:var(--ink);}
+  .suggitem b, .modelitem b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:14px;}
+  .suggitem span, .modelitem span{display:block; font-size:12px; color:var(--ink2); margin-top:2px;}
+  details{margin-top:16px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:4px 14px;}
+  details summary{font-size:14px; font-weight:650; padding:10px 0; cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;}
+  details summary::after{content:"▾"; color:var(--ink2);}
+  details[open] summary::after{content:"▴";}
+  details .inner{padding:2px 0 12px;}
+  .famhelp p{font-size:13px; line-height:1.55; margin:0 0 10px; color:var(--ink);}
+  .famhelp b{color:var(--ink);}
+  .searchbox{width:100%; padding:9px 12px; font-size:14px; border-radius:10px; border:1px solid var(--line);
+    background:var(--bg); color:var(--ink); outline:none; margin-bottom:9px;}
+  footer{margin-top:22px; font-size:11.5px; color:var(--ink2); line-height:1.55; text-align:center;}
+  /* doc links */
+  .links{display:flex; gap:8px; margin-top:13px; flex-wrap:wrap;}
+  .linkbtn{flex:1 1 45%; text-align:center; text-decoration:none; font-size:13px; font-weight:650;
+    padding:11px 10px; border-radius:12px; background:var(--unk-bg); color:var(--ink);
+    border:1px solid var(--line); white-space:nowrap;}
+  /* finder chips */
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 2px;}
+  .chip{border:1px solid var(--line); background:var(--card); color:var(--ink2);
+    border-radius:20px; padding:6px 12px; font-size:12.5px; font-weight:600;}
+  .chip.on{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+  .grouplabel{font-size:10.5px; font-weight:700; letter-spacing:.7px; text-transform:uppercase;
+    color:var(--ink2); margin:12px 2px 5px;}
+  .patternbox{background:var(--unk-bg); border-radius:12px; padding:10px 12px;
+    font-size:12.5px; line-height:1.6; margin:12px 0 10px; color:var(--ink);}
+  .patternbox code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:700; font-size:12px;}
+  .patternbox .pl{color:var(--ink2);}
+  .findercount{font-size:12px; color:var(--ink2); margin:4px 2px 8px;}
+  /* history chips */
+  .hist{display:flex; gap:6px; overflow-x:auto; margin-top:9px; padding-bottom:2px; scrollbar-width:none;}
+  .hist::-webkit-scrollbar{display:none;}
+  .hist button{flex:0 0 auto; border:1px solid var(--line); background:var(--card); color:var(--ink2);
+    border-radius:20px; padding:5px 11px; font-size:12px; font-family:ui-monospace,Menlo,monospace;}
+  /* scanner overlay */
+  #scanner{position:fixed; inset:0; background:#000; z-index:100; display:none; flex-direction:column;}
+  #scanner.open{display:flex;}
+  #scanner video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;}
+  .shade{position:absolute; left:0; right:0; background:rgba(0,0,0,.55);}
+  .shade.top{top:0; height:39%;}
+  .shade.bot{bottom:0; height:39%;}
+  .shade.left{top:39%; height:22%; left:0; width:5%;}
+  .shade.right{top:39%; height:22%; right:0; width:5%; left:auto;}
+  .guide{position:absolute; top:39%; left:5%; width:90%; height:22%;
+    border:2.5px solid var(--accent); border-radius:12px;}
+  .scanui{position:absolute; left:0; right:0; bottom:0; padding:0 20px calc(env(safe-area-inset-bottom,0px) + 26px);
+    display:flex; flex-direction:column; align-items:center; gap:14px;}
+  #scanstatus{color:#fff; font-size:13.5px; text-align:center; background:rgba(0,0,0,.55);
+    padding:8px 14px; border-radius:20px; max-width:92%;}
+  .snap{width:72px; height:72px; border-radius:50%; border:5px solid #fff; background:var(--accent);}
+  .snap:disabled{opacity:.5;}
+  .closescan{position:absolute; top:calc(env(safe-area-inset-top,0px) + 14px); right:16px;
+    width:38px; height:38px; border-radius:50%; border:0; background:rgba(0,0,0,.55); color:#fff; font-size:17px;}
+  .scantip{position:absolute; top:calc(env(safe-area-inset-top,0px) + 18px); left:16px; right:66px;
+    color:#fff; font-size:13px; text-shadow:0 1px 3px rgba(0,0,0,.8);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo">PN</div>
+      <div>
+        <h1>Banner Sensor PN Decoder</h1>
+        <div class="sub">QS18 · Q4X · Q5X · Q3X · S18-2 · QS30 · Q2X · Q20</div>
+      </div>
+    </div>
+    <div class="inputrow">
+      <div class="field">
+        <input id="pn" placeholder="Type a part number… e.g. QS18VN6LV" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+        <button class="clearbtn" id="clearbtn" aria-label="Clear">✕</button>
+      </div>
+      <button class="scanbtn" id="scanopen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Scan
+      </button>
+    </div>
+    <div class="hist" id="hist"></div>
+  </header>
+
+  <div id="out"></div>
+
+  <details id="finder">
+    <summary>Find a sensor by style</summary>
+    <div class="inner">
+      <div class="grouplabel">Sensing style</div><div class="chips" data-group="style"></div>
+      <div class="grouplabel">Light source</div><div class="chips" data-group="light"></div>
+      <div class="grouplabel">Output</div><div class="chips" data-group="out"></div>
+      <div class="grouplabel">Family</div><div class="chips" data-group="fam"></div>
+      <div class="grouplabel">Connection</div><div class="chips" data-group="conn"></div>
+      <div id="patternhint"></div>
+      <div class="findercount" id="findercount"></div>
+      <div id="finderresults"></div>
+    </div>
+  </details>
+
+  <details id="browse">
+    <summary>Browse known catalog models</summary>
+    <div class="inner listwrap">
+      <input class="searchbox" id="modelsearch" placeholder="Filter… e.g. laser, retro, QS18, FF" autocomplete="off">
+      <div id="modellist"></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Which family do I have? (visual ID)</summary>
+    <div class="inner famhelp">
+      <p><b>QS18</b> — small rectangular “wedge” body with an 18 mm threaded lens nose (fits M18 brackets). No display. The workhorse mini photoelectric.</p>
+      <p><b>S18-2</b> — smooth 18 mm threaded plastic <b>barrel/cylinder</b> with lock nuts, lens on the end face.</p>
+      <p><b>Q4X</b> — blocky right-angle body in polished <b>stainless steel</b> with an angled face carrying a red digit display and 3 buttons.</p>
+      <p><b>Q5X</b> — like a <b>larger black-plastic Q4X</b>: display + 3 buttons, bright laser spot, rotatable M12 base.</p>
+      <p><b>Q3X</b> — the <b>smallest of the display trio</b>: compact metal-look rectangle, small red display, 2 buttons.</p>
+      <p><b>QS30</b> — mid-size rectangular WORLD-BEAM “flat-pack”, big front lens pair, much larger than QS18, no display.</p>
+      <p><b>Q2X</b> — <b>miniature</b> flat rectangle (thumbnail-size), thin cable or M8 pigtail, no display.</p>
+      <p><b>Q20</b> — small flat low-cost rectangle, between Q2X and QS18 in size, side mounting holes, no display.</p>
+    </div>
+  </details>
+
+  <footer>
+    Decoded from Banner Engineering datasheets &amp; manuals (QS18 manual 197052, Q4X 181483/190074, Q5X 208794, Q3X 181485, S18-2 170670, QS30 119165, Q20 127816, Q2X 229259).<br>
+    Always verify critical specs against the official datasheet. Not affiliated with Banner Engineering.
+  </footer>
+</div>
+
+<div id="scanner">
+  <video id="video" playsinline autoplay muted></video>
+  <div class="shade top"></div><div class="shade bot"></div><div class="shade left"></div><div class="shade right"></div>
+  <div class="guide"></div>
+  <div class="scantip">Line the printed model number up inside the box, hold steady, then tap the button.</div>
+  <button class="closescan" id="scanclose">✕</button>
+  <div class="scanui">
+    <div id="scanstatus">Starting camera…</div>
+    <button class="snap" id="snap" aria-label="Capture"></button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= LIGHT SOURCE HELPERS ================= */
+const L = {
+  IR: (nm) => ({kind:'ir', label:'Infrared LED', detail:(nm?nm+' nm · ':'')+'invisible beam'}),
+  RED: (nm) => ({kind:'red', label:'Visible red LED', detail:(nm?nm+' nm':'red LED')}),
+  L1: (nm) => ({kind:'laser', label:'LASER · Class 1', detail:(nm||655)+' nm visible red'}),
+  L2: (nm) => ({kind:'laser', label:'LASER · Class 2', detail:(nm||655)+' nm visible red'}),
+  US: () => ({kind:'us', label:'Ultrasonic', detail:'sound waves — no light'}),
+  UNK: () => ({kind:'unk', label:'See datasheet', detail:'light source varies'})
+};
+
+/* ================= QS18 DATA ================= */
+const QS18_MODES = {
+  R:    {m:'Opposed (through-beam) — receiver', r:'20 m', l:L.IR(940), note:'Pairs with QS186E / QS186EV / QS186LE emitter'},
+  RB:   {m:'Opposed (through-beam) — short-range receiver', r:'3 m', l:L.IR(940), note:'Pairs with QS186EB emitter'},
+  LV:   {m:'Retroreflective (non-polarized)', r:'6.5 m', l:L.RED(628)},
+  LP:   {m:'Polarized retroreflective', r:'3.5 m', re:'3.5 m', l:L.RED(630)},
+  LLP:  {m:'Polarized retroreflective — LASER', r:'0.1–10 m', l:L.L1(650)},
+  XLP:  {m:'Clear object detection (coaxial polarized retro)', r:'3 m', l:L.RED(625)},
+  XLPC: {m:'Clear object detection — TEACH', r:'3 m', l:L.RED(625), expertOnly:true},
+  CV15: {m:'Convergent beam', r:'16 mm focus', l:L.RED(630)},
+  CV45: {m:'Convergent beam', r:'43 mm focus', l:L.RED(630)},
+  D:    {m:'Diffuse (proximity)', r:'450 mm', re:'800 mm', l:L.IR(940)},
+  DB:   {m:'Diffuse — flush front lens', r:'450 mm', re:'500 mm', l:L.IR(940)},
+  DL:   {m:'Diffuse — long range', r:'600 mm', l:L.IR(940)},
+  DVS:  {m:'Diffuse — visible spot', r:'250 mm', l:L.RED(630)},
+  DV:   {m:'Diffuse — visible red', r:'600 mm', l:L.RED(660), expertOnly:true},
+  W:    {m:'Divergent diffuse (wide beam)', r:'100 mm', re:'300 mm', l:L.IR(940)},
+  DXL:  {m:'Diffuse — extended range', r:'1 m', l:L.IR(850), wOnly:true},
+  FF50: {m:'Fixed-field (background suppression)', r:'50 mm cutoff', l:L.RED(630)},
+  FF100:{m:'Fixed-field (background suppression)', r:'100 mm cutoff', l:L.RED(630)},
+  FF125:{m:'Fixed-field (background suppression)', r:'125 mm cutoff', l:L.RED(630), note:'Catalog models are PNP only'},
+  FF150:{m:'Fixed-field (background suppression)', r:'150 mm cutoff', l:L.RED(630)},
+  AF100:{m:'Adjustable-field background suppression', r:'cutoff adj. 20–100 mm', l:L.RED(660)},
+  AF120:{m:'Adjustable-field background suppression', r:'cutoff adj. 30–120 mm', l:L.RED(640)},
+  AF250:{m:'Adjustable-field background suppression', r:'cutoff adj. 30–250 mm', l:L.RED(640)},
+  AF300:{m:'Adjustable-field background suppression', r:'cutoff adj. 30–300 mm', l:L.RED(640)},
+  LAF250:{m:'Adjustable-field BGS — LASER', r:'cutoff adj. 50–250 mm', l:L.L2(658)},
+  LAF:  {m:'Adjustable-field BGS — LASER', r:'cutoff adj. 30–150 mm', l:L.L1(650)},
+  LD:   {m:'Diffuse — LASER', r:'300 mm (≈1 mm spot at focus)', l:L.L1(650)},
+  F:    {m:'Fiber-optic amplifier — glass fibers', r:'depends on fiber', l:L.IR(940)},
+  FP:   {m:'Fiber-optic amplifier — plastic fibers', r:'depends on fiber', l:L.RED(660)}
+};
+const QS18_MODE_ORDER = ['LAF250','XLPC','AF100','AF120','AF250','AF300','FF100','FF125','FF150','LLP','LAF','XLP','CV15','CV45','DVS','DXL','FF50','DB','DL','DV','LD','LP','LV','RB','FP','F','D','R','W'];
+const QS18_EMITTERS = {
+  E:  {m:'Opposed (through-beam) — emitter', r:'20 m beam', l:L.IR(940)},
+  EV: {m:'Opposed — emitter, visible', r:'20 m beam', l:L.RED(624)},
+  EB: {m:'Opposed — short-range emitter', r:'3 m beam', l:L.IR(940)},
+  LE: {m:'Opposed — LASER emitter', r:'up to 30 m beam', l:L.L1(650), note:'Small precise spot'}
+};
+const QS18_OUT = {
+  VN:'NPN (sinking) ×2 — complementary NO + NC',
+  VP:'PNP (sourcing) ×2 — complementary NO + NC',
+  EN:'NPN — Expert TEACH (button + remote teach)',
+  EP:'PNP — Expert TEACH (button + remote teach)',
+  EK:'IO-Link + push-pull — Expert TEACH',
+  K :'IO-Link (smart sensor profile)',
+  AB:'Bipolar (1 NPN + 1 PNP) — light operate',
+  RB:'Bipolar (1 NPN + 1 PNP) — dark operate'
+};
+const QS18_EXPERT_OK = new Set(['D','DB','W','DV','LP','XLPC','CV15','CV45','FP','F','AF120','AF250']);
+const QD = {
+  '':'Integral 2 m PVC cable',
+  'W/30':'Integral 9 m (30 ft) cable',
+  Q:'150 mm pigtail → 4-pin M8 (Pico) QD',
+  Q5:'150 mm pigtail → 4-pin M12 (Euro) QD',
+  Q7:'Integral 4-pin M8 (Pico) QD',
+  Q8:'Integral 4-pin M12 (Euro) QD',
+  Q9:'Integral 4-pin M8 QD (snap-fit)',
+  Q1:'Special-order connector variant',
+  Q2:'150 mm pigtail → 4-pin ½"-20UNF QD',
+  C1:'2 m 600 V-rated PVC cable',
+  QPMA:'150 mm PUR pigtail → 4-pin M12 QD'
+};
+
+/* ================= OTHER FAMILY DATA ================= */
+const S18_MODES = {
+  EL:{m:'Opposed — emitter', r:'25 m beam', l:L.UNK(), na:true},
+  ES:{m:'Opposed — emitter with power adjust', r:'25 m beam', l:L.UNK(), na:true},
+  EJ:{m:'Opposed — emitter with beam-inhibit input', r:'25 m beam', l:L.UNK(), na:true},
+  RL:{m:'Opposed — receiver', r:'25 m', l:L.UNK()},
+  RS:{m:'Opposed — receiver with sensitivity pot', r:'25 m', l:L.UNK()},
+  LPC:{m:'Polarized retroreflective (with pot)', r:'6 m', l:L.RED()},
+  LP:{m:'Polarized retroreflective', r:'6 m', l:L.RED()},
+  LV:{m:'Retroreflective (non-polarized, with adjust)', r:'7.5 m', l:L.RED()},
+  DL:{m:'Diffuse — long range', r:'750 mm', l:L.UNK()},
+  DS:{m:'Diffuse — short range (with pot)', r:'300 mm', l:L.UNK()},
+  FF30:{m:'Fixed-field (background suppression)', r:'30 mm cutoff', l:L.RED()},
+  FF50:{m:'Fixed-field (background suppression)', r:'50 mm cutoff', l:L.RED()},
+  FF75:{m:'Fixed-field (background suppression)', r:'75 mm cutoff', l:L.RED()},
+  FF100:{m:'Fixed-field (background suppression)', r:'100 mm cutoff', l:L.RED()},
+  FF150:{m:'Fixed-field (background suppression)', r:'150 mm cutoff', l:L.RED()},
+  FF200:{m:'Fixed-field (background suppression)', r:'200 mm cutoff', l:L.RED()}
+};
+const QS30_MODES = {
+  ELVC:{m:'Clear object detection — retro, TEACH', r:'100 mm – 2 m', l:L.RED(660), note:'“Expert” TEACH model'},
+  EXH2O:{m:'Opposed — high-power emitter, water detection', r:'213 m beam', l:L.IR(), na:true},
+  LLPC:{m:'Polarized retro — LASER, low-contrast TEACH', r:'0.2–18 m', l:L.L1(), note:'For small / partial-beam targets, thread break'},
+  AFF400:{m:'Adjustable foreground suppression', r:'400 mm', l:L.RED()},
+  FF200:{m:'Fixed-field (background suppression)', r:'200 mm cutoff', l:L.RED()},
+  FF400:{m:'Fixed-field (background suppression)', r:'400 mm cutoff', l:L.RED()},
+  FF600:{m:'Fixed-field (background suppression)', r:'600 mm cutoff', l:L.RED()},
+  AF600:{m:'Adjustable-field background suppression', r:'cutoff adj. 50–600 mm', l:L.RED()},
+  EDV:{m:'Diffuse — visible red, TEACH', r:'≈1.4 m', l:L.RED(), note:'“Expert” TEACH model'},
+  ARX:{m:'Opposed — high-power receiver (light operate)', r:'213 m', l:L.IR()},
+  RRX:{m:'Opposed — high-power receiver (dark operate)', r:'213 m', l:L.IR()},
+  LLP:{m:'Polarized retroreflective — LASER', r:'0.2–18 m', l:L.L1()},
+  LDL:{m:'Diffuse — LASER, long range', r:'800 mm', l:L.L2()},
+  EX:{m:'Opposed — high-power emitter', r:'213 m beam', l:L.IR(), na:true},
+  LD:{m:'Diffuse — LASER', r:'400 mm', l:L.L1()},
+  LP:{m:'Polarized retroreflective', r:'8 m', l:L.RED()},
+  LV:{m:'Retroreflective (non-polarized)', r:'12 m', l:L.RED()},
+  AF:{m:'Adjustable-field background suppression', r:'cutoff adj. 50–300 mm', l:L.RED()},
+  E:{m:'Opposed — emitter', r:'60 m beam', l:L.IR(), na:true},
+  R:{m:'Opposed — receiver', r:'60 m', l:L.IR()},
+  D:{m:'Diffuse (proximity)', r:'1 m', l:L.IR()}
+};
+const QS30_ORDER = ['ELVC','EXH2O','LLPC','AFF400','FF200','FF400','FF600','AF600','EDV','ARX','RRX','LLP','LDL','EX','LD','LP','LV','AF','E','R','D'];
+const Q2X_MODES = {
+  FFVS30:{m:'Fixed-field BGS — small variable spot', r:'30 mm cutoff', l:L.RED(645)},
+  FFVS50:{m:'Fixed-field BGS — small variable spot', r:'50 mm cutoff', l:L.RED(645)},
+  FF15:{m:'Fixed-field (background suppression)', r:'15 mm cutoff', l:L.RED(645)},
+  FF30:{m:'Fixed-field (background suppression)', r:'30 mm cutoff', l:L.RED(645)},
+  FF50:{m:'Fixed-field (background suppression)', r:'50 mm cutoff', l:L.RED(645)},
+  FF75:{m:'Fixed-field (background suppression)', r:'75 mm cutoff', l:L.RED(645)},
+  AF150:{m:'Adjustable-field background suppression', r:'cutoff adj. 18–150 mm', l:L.RED()},
+  LAF100:{m:'Adjustable-field BGS — LASER', r:'cutoff adj. 18–100 mm', l:L.L1()},
+  LAF2IR:{m:'Laser measurement — infrared', r:'20–2000 mm', l:{kind:'laser', label:'LASER · Class 1 (IR)', detail:'940 nm — invisible'}},
+  LAF3IR:{m:'Laser measurement — infrared', r:'20–3000 mm', l:{kind:'laser', label:'LASER · Class 1 (IR)', detail:'940 nm — invisible'}},
+  LPF:{m:'Polarized retroreflective', r:'see datasheet', l:L.RED()},
+  R:{m:'Opposed — receiver', r:'3 m', l:L.RED()}
+};
+const Q20_MODES = {
+  RL:{m:'Opposed — receiver (long range)', r:'20 m', l:L.IR(), note:'Pairs with Q20EL emitter'},
+  R:{m:'Opposed — receiver', r:'12 m', l:L.RED(), note:'Pairs with Q20E emitter'},
+  LP:{m:'Polarized retroreflective', r:'4 m', l:L.RED()},
+  LV:{m:'Retroreflective (non-polarized)', r:'6 m', l:L.RED()},
+  DVS:{m:'Diffuse — small visible spot', r:'250 mm', l:L.RED()},
+  DXL:{m:'Diffuse — extra-long range', r:'1.5 m', l:L.UNK()},
+  DL:{m:'Diffuse — long range', r:'800 mm', l:L.UNK()},
+  D:{m:'Diffuse (proximity)', r:'250 mm', l:L.UNK()},
+  FF50:{m:'Fixed-field (background suppression)', r:'50 mm cutoff', l:L.RED()},
+  FF100:{m:'Fixed-field (background suppression)', r:'100 mm cutoff', l:L.RED()},
+  FF150:{m:'Fixed-field (background suppression)', r:'150 mm cutoff', l:L.RED()}
+};
+
+/* ================= KNOWN CATALOG MODELS ================= */
+const KNOWN = new Set(("QS186E QS186EQ8 QS186EV QS186EB QS186LE QS186LEQ8 QS18VN6R QS18VP6R QS18VP6RQ8 QS18VN6RB QS18VP6RB "+
+"QS18VN6LV QS18VP6LV QS18VN6LVQ8 QS18VP6LVQ8 QS18VN6LP QS18VP6LP QS18VN6LPQ8 QS18VP6LPQ5 QS18RB6LPQ8 "+
+"QS18VN6LLP QS18VP6LLP QS18VN6LLPQ8 QS18VP6LLPQ8 QS18VN6LD QS18VP6LD QS18VN6LDQ8 QS18VN6LAF QS18VP6LAF QS18VP6LAF250Q "+
+"QS18VN6D QS18VP6D QS18VP6DQ8 QS18VN6DL QS18VP6DL QS18VP6DLQ8 QS18VN6DVS QS18VP6DVS QS18VN6DB QS18VP6DB "+
+"QS18VN6W QS18VP6W QS18VP6WQ8 QS18VN6FF50 QS18VP6FF50 QS18VP6FF50Q8 QS18VN6FF100 QS18VP6FF100 QS18VP6FF100Q9 "+
+"QS18VP6FF125 QS18VN6FF150 QS18VP6FF150 QS18VP6FF150Q8 QS18VN6AF100 QS18VP6AF100 QS18VP6AF100Q5 QS18VN6AF250 "+
+"QS18VP6AF250 QS18VP6AF250Q8 QS18K6AF250Q8 QS18K6AF120Q8 QS18VN6AF300 QS18VP6AF300 QS18AB6AF300 "+
+"QS18VN6CV15 QS18VP6CV15 QS18VN6CV45 QS18VP6CV45 QS18VN6F QS18VP6F QS18VN6FP QS18VP6FP "+
+"QS18VN6XLP QS18VP6XLP QS18VP6XLPQ8 QS18EN6XLPC QS18EP6XLPC QS18EK6XLPC QS18EN6D QS18EP6D QS18EP6DQ8 "+
+"QS18EN6LP QS18EP6LP QS18EP6LPQ8 QS18EN6LPQ8 QS18EN6DV QS18EP6DV QS18EP6DVQ5 QS18EK6LPQ8 QS18EK6DQ8 QS18EK6DVQ8 "+
+"QS18EK6CV15Q8 QS18EK6CV45Q8 QS18EK6FPQ8 QS18UNA QS18UPA QS18UPAQ8 QS18UNAE QS18UPAE QS18WE QS18APWR QS18RPWLPQ2 QS18APWDXL "+
+"Q4XTBLAF100-Q8 Q4XTBLAF300-Q8 Q4XTBLAF500-Q8 Q4XTBCOD300-Q8 Q4XTILAF100-Q8 Q4XTILAF300-Q8 Q4XTILAF500-Q8 Q4XTILAF600-Q8 "+
+"Q4XTULAF100-Q8 Q4XTULAF300-Q8 Q4XTULAF500-Q8 Q4XTULAF600-Q8 Q4XTKLAF100-Q8 Q4XTKLAF300-Q8 Q4XTKLAF600-Q8 "+
+"Q4XFKLAF110-Q8 Q4XFKLAF310-Q8 Q4XFKLAF610-Q8 Q4XFPLAF110-Q8 Q4XFPLAF310-Q8 Q4XFNLAF110-Q8 Q4XFNLAF310-Q8 Q4XFPCOD310-Q8 "+
+"Q5XKLAF2000-Q8 Q5XKLAF3000-Q8 Q5XKLAF5000-Q8 Q5XKLAF10000-Q8 Q5XKLAF2000-Q8-JAM Q5XKLAF2000-Q8-PFM "+
+"Q3XTBLD-Q8 Q3XTBLD50-Q8 Q3XTBLD100-Q8 Q3XTBLD150-Q8 Q3XTBLD200-Q8 "+
+"S18-2NAEL-2M S18-2NAEL-Q8 S18-2NAES-Q8 S18-2NAEJ-2M S18-2VNRL-Q8 S18-2VPRL-Q8 S18-2VNRS-Q8 S18-2VPRS-Q8 "+
+"S18-2VPLP-Q8 S18-2VNLP-2M S18-2VPLPC-Q8 S18-2VNLPC-2M S18-2VPLV-Q8 S18-2VNLV-2M S18-2VPDL-2M S18-2VPDL-Q8 S18-2VNDL-2M "+
+"S18-2VPDS-Q8 S18-2VNDS-2M S18-2VPFF50-Q8 S18-2VPFF100-Q8 S18-2VNFF200-2M "+
+"QS30E QS30EQ QS30R QS30RQ QS30EX QS30EXQ QS30ARX QS30ARXQ QS30RRX QS30RRXQ QS30LV QS30LVQ QS30LP QS30LPQ "+
+"QS30LLP QS30LLPQ QS30LLPC QS30LLPCQ QS30D QS30DQ QS30LD QS30LDQ QS30LDL QS30LDLQ QS30ELVC QS30ELVCQ QS30ELVCQ5 "+
+"QS30FF200 QS30FF400 QS30FF600 QS30AF600Q "+
+"Q2XABFF30-Q Q2XABAF150-Q5 Q2XRBAF150-Q5 Q2XABLAF100-Q5 Q2XKLAF2IR-Q Q2XKLAF3IR-Q5 Q2XAPR-Q3 Q2XAPLPF-Q3 Q2XRPAF150-2M "+
+"Q20E Q20EL Q20PR Q20NR Q20PRL Q20NRL Q20PLP Q20NLV Q20PDL Q20NDL Q20PFF100 Q20PLPQ7").split(/\s+/));
+
+/* ================= PARSER ================= */
+function seg(text, meaning){ return {t:text, d:meaning}; }
+
+function stripSuffixes(pn, connSet){
+  let cable9 = false, special = null, conn = '';
+  let m = pn.match(/-(\d{3,5})$/);
+  if(m){ special = m[1]; pn = pn.slice(0, -m[0].length); }
+  if(/W\/30$/.test(pn)){ cable9 = true; pn = pn.replace(/\s*W\/30$/,''); }
+  for(const c of connSet){
+    if(pn.endsWith(c)){ conn = c; pn = pn.slice(0, -c.length); break; }
+  }
+  return {pn, conn, cable9, special};
+}
+
+function parseQS18(raw){
+  const fam = {family:'QS18', famName:'WORLD-BEAM QS18', famDesc:'Miniature universal-housing photoelectric — rectangular body with 18 mm threaded lens nose, 10–30 V DC, IP67.'};
+  const S = stripSuffixes(raw, ['QPMA','Q8','Q9','Q7','Q5','Q2','Q1','C1','Q']);
+  let pn = S.pn;
+  const segs = [seg('QS18','WORLD-BEAM QS18 series')];
+  const notes = [], warns = [];
+  let out=null, supply='10–30 V DC', modeInfo=null, modeCode=null, expert=false;
+
+  // Emitters QS186x
+  let m = pn.match(/^QS186(LE|EV|EB|E)(\d+)?$/);
+  if(m){
+    modeCode = m[1]; modeInfo = QS18_EMITTERS[m[1]];
+    segs.push(seg('6','DC family'), seg(m[1], modeInfo.m));
+    if(m[2]) { notes.push('Factory variant “'+m[2]+'” — base model shown'); segs.push(seg(m[2],'factory variant')); }
+    out = 'None — emitter only (2-wire); use with a matching receiver';
+  }
+  // Ultrasonic
+  else if((m = pn.match(/^QS18(UN|UP)A(E)?$/))){
+    modeCode='ULTRASONIC';
+    modeInfo = {m:'Ultrasonic proximity (TEACH)', r:'50–500 mm', l:L.US()};
+    out = (m[1]==='UN'?'NPN (sinking)':'PNP (sourcing)') + ' — TEACH-mode ultrasonic';
+    segs.push(seg(m[1], m[1]==='UN'?'Ultrasonic, NPN output':'Ultrasonic, PNP output'), seg('A','TEACH model'));
+    if(m[2]){ notes.push('E = epoxy-encapsulated electronics'); segs.push(seg('E','epoxy-encapsulated')); }
+    fam.famName = 'QS18U (ultrasonic)';
+  }
+  // Universal voltage W-series
+  else if((m = pn.match(/^QS18(A|R)(N|P)W(.*)$/))){
+    supply = m[2]==='N' ? '20–270 V AC/DC (N-MOSFET)' : '20–140 V AC/DC (P-MOSFET)';
+    out = (m[2]==='N'?'N-MOSFET (sinking)':'P-MOSFET (sourcing)') + ' — ' + (m[1]==='A'?'light operate':'dark operate') + ', 3-wire';
+    segs.push(seg(m[1], m[1]==='A'?'Light operate':'Dark operate'), seg(m[2], m[2]==='N'?'N-MOSFET sinking':'P-MOSFET sourcing'), seg('W','universal voltage AC/DC family'));
+    const rest = m[3];
+    modeCode = rest || 'R';
+    modeInfo = QS18_MODES[rest] || (rest===''?null:null);
+    if(rest==='R'){ modeInfo = {m:'Opposed (through-beam) — receiver', r:'see datasheet', l:L.IR()}; }
+    if(!modeInfo){ return fail(fam, raw, 'Unrecognized W-series mode “'+rest+'”'); }
+    segs.push(seg(rest, modeInfo.m));
+    fam.famName = 'QS18 (universal voltage)';
+  }
+  else if(pn === 'QS18WE'){
+    modeCode='E'; modeInfo = {m:'Opposed — emitter (universal voltage)', r:'see datasheet', l:L.IR()};
+    out='None — emitter only'; supply='20–270 V AC/DC';
+    segs.push(seg('W','universal voltage family'), seg('E','emitter'));
+  }
+  // Standard DC
+  else if((m = pn.match(/^QS18(VN|VP|EN|EP|EK|AB|RB|K)6(.+)$/))){
+    const oc = m[1]; out = QS18_OUT[oc];
+    expert = (oc==='EN'||oc==='EP'||oc==='EK');
+    segs.push(seg(oc, out), seg('6','DC solid-state family'));
+    const rest = m[2];
+    for(const code of QS18_MODE_ORDER){
+      if(rest === code){ modeCode = code; modeInfo = QS18_MODES[code]; break; }
+    }
+    if(!modeInfo) return fail(fam, raw, 'Unrecognized QS18 sensing-mode code “'+rest+'”');
+    segs.push(seg(modeCode, modeInfo.m));
+    if(expert){
+      fam.famName = 'QS18 Expert (TEACH)';
+      if(!QS18_EXPERT_OK.has(modeCode)) warns.push('Heads-up: “'+modeCode+'” is not a standard Expert-series catalog mode — double-check this part number. (Opposed receivers, for example, are QS18Vx6R, not QS18Ex6R.)');
+      if(modeInfo.re) modeInfo = Object.assign({}, modeInfo, {r:modeInfo.re});
+    }
+    if(modeInfo.expertOnly && !expert) warns.push('“'+modeCode+'” is normally an Expert (QS18Ex6…) mode.');
+    if(modeCode==='FF125' && oc==='VN') warns.push('FF125 catalog models are PNP only — QS18VN6FF125 may not exist.');
+  }
+  else return fail(fam, raw, 'This QS18 part number doesn’t match the known nomenclature');
+
+  if(S.conn){ segs.push(seg(S.conn, QD[S.conn]||'connector')); }
+  if(S.cable9) segs.push(seg('W/30','9 m (30 ft) cable'));
+  if(S.special){ segs.push(seg('-'+S.special,'customer-special / factory-modified variant')); notes.push('“-'+S.special+'” = customer-special variant; base function shown, specifics may differ.'); }
+
+  return {ok:true, fam, segs, notes, warns,
+    mode:modeInfo.m, range:modeInfo.r, light:modeInfo.l,
+    output:out, supply, conn: connText(S), modeNote: modeInfo.note};
+}
+
+function connText(S){
+  if(S.cable9) return QD['W/30'];
+  return QD[S.conn] || QD[''];
+}
+
+function parseQ4X(raw){
+  const fam = {family:'Q4X', famName:'Q4X (stainless laser distance)', famDesc:'Rugged 316L stainless-steel laser distance sensor with display, 10–30 V DC.'};
+  const m = raw.match(/^Q4X(T|F)(B|N|P|I|U|K)(LAF|COD)(\d{3})-?Q8$/);
+  if(!m) return fail(fam, raw, 'This Q4X part number doesn’t match the known nomenclature');
+  const [_, hs, oc, mode, rng] = m;
+  const housing = hs==='T' ? 'Standard housing — angled display + 3 buttons' : 'Flush-mount housing — flat face, IP69K';
+  const minR = hs==='T' ? 25 : 35;
+  const validT = ['100','300','500','600'], validF=['110','310','610'];
+  const warns=[], notes=[];
+  if((hs==='T'&&!validT.includes(rng)) || (hs==='F'&&!validF.includes(rng)))
+    warns.push('Range “'+rng+'” is not a standard catalog range for the '+(hs==='T'?'standard':'flush')+' housing ('+(hs==='T'?validT:validF).join('/')+' mm).');
+  const OUT = {B:'Bipolar discrete (1 NPN + 1 PNP) · 5-pin M12', N:'NPN ×1 · 4-pin M12', P:'PNP ×1 · 4-pin M12',
+    I:'Analog 4–20 mA + 1 discrete · 5-pin M12', U:'Analog 0–10 V + 1 discrete · 5-pin M12', K:'Dual discrete + IO-Link · 4-pin M12'};
+  const MODE = {LAF:'Laser distance — adjustable field (BGS/FGS)', COD:'Clear object detection — laser distance'};
+  return {ok:true, fam,
+    segs:[seg('Q4X','Q4X series'), seg(hs,housing), seg(oc,OUT[oc]), seg(mode,MODE[mode]), seg(rng,'max range '+rng+' mm'), seg('-Q8','integral M12 QD')],
+    notes, warns, mode:MODE[mode], range:minR+'–'+rng+' mm', light:L.L1(655),
+    output:OUT[oc], supply:'10–30 V DC', conn:'Integral M12 (Euro) QD', housing};
+}
+
+function parseQ5X(raw){
+  const fam = {family:'Q5X', famName:'Q5X (high-power laser distance)', famDesc:'High-excess-gain laser distance sensor with display; handles dark or shiny targets, 10–30 V DC.'};
+  const m = raw.match(/^Q5XKLAF(2000|3000|5000|10000)-?Q8(-JAM|-PFM)?$/);
+  if(!m) return fail(fam, raw, 'This Q5X part number doesn’t match the known nomenclature');
+  const rng = m[1]; const minR = (rng==='5000'||rng==='10000') ? 50 : 95;
+  const notes=[];
+  if(m[2]==='-JAM') notes.push('Factory-preconfigured for jam detection (dual mode).');
+  if(m[2]==='-PFM') notes.push('Factory-preconfigured pulse-frequency-modulated (PFM) output.');
+  return {ok:true, fam,
+    segs:[seg('Q5X','Q5X series'), seg('K','dual discrete + IO-Link'), seg('LAF','laser adjustable field'), seg(rng,'max range '+rng+' mm'), seg('-Q8','rotatable M12 QD')].concat(m[2]?[seg(m[2],'preconfigured variant')]:[]),
+    notes, warns:[], mode:'Laser distance — adjustable field (BGS/FGS)', range:minR+' mm – '+(Number(rng)/1000)+' m',
+    light:L.L2(655), output:'Dual discrete + IO-Link (Ch1 IO-Link/push-pull, Ch2 PNP/multifunction)',
+    supply:'10–30 V DC', conn:'Integral 4-pin M12 QD (rotates 270°)'};
+}
+
+function parseQ3X(raw){
+  const fam = {family:'Q3X', famName:'Q3X (high-speed laser contrast)', famDesc:'Compact high-speed (250 µs) laser contrast sensor with display, 10–30 V DC.'};
+  const m = raw.match(/^Q3XTBLD(50|100|150|200)?-?Q8$/);
+  if(!m) return fail(fam, raw, 'This Q3X part number doesn’t match the known nomenclature');
+  const cut = {50:'60',100:'120',150:'190',200:'280'}[m[1]];
+  const range = m[1] ? ('0–'+m[1]+' mm (BGS cutoff '+cut+' mm)') : '0–300 mm (contrast only, no BGS)';
+  return {ok:true, fam,
+    segs:[seg('Q3X','Q3X series'), seg('T','standard display housing'), seg('B','bipolar NPN + PNP'), seg('LD'+(m[1]||''), m[1]?'laser diffuse w/ background suppression':'laser diffuse — contrast/intensity'), seg('-Q8','integral 5-pin M12 QD')],
+    notes:[], warns:[], mode:'Laser contrast / diffuse' + (m[1]?' with background suppression':''), range,
+    light:L.L2(655), output:'Bipolar (1 NPN + 1 PNP)', supply:'10–30 V DC', conn:'Integral 5-pin M12 QD'};
+}
+
+function parseS18(raw){
+  const fam = {family:'S18-2', famName:'WORLD-BEAM S18-2', famDesc:'18 mm threaded-barrel photoelectric (2nd generation), 10–30 V DC.'};
+  const m = raw.match(/^S18-?2(NA|VN|VP)(EL|ES|EJ|RL|RS|LPC|LP|LV|DL|DS|FF30|FF50|FF75|FF100|FF150|FF200)(?:-(2M|9M|Q8|Q5|Q3))?$/);
+  if(!m) return fail(fam, raw, 'This S18-2 part number doesn’t match the known nomenclature');
+  const [_, oc, mode, cn] = m;
+  const mi = S18_MODES[mode];
+  const warns=[];
+  if(oc==='NA' && !mi.na) warns.push('“NA” (no output) is only used on emitters — check this part number.');
+  if(oc!=='NA' && mi.na) warns.push('Emitter modes normally use “NA” (no output) — check this part number.');
+  const out = oc==='NA' ? 'None — emitter only' : (oc==='VN'?'NPN (sinking) ×2 — complementary':'PNP (sourcing) ×2 — complementary');
+  const CONN = {'2M':'Integral 2 m PVC cable','9M':'Integral 9 m cable','Q8':'Integral 4-pin M12 (Euro) QD','Q5':'150 mm pigtail → 4-pin M12 QD','Q3':'M8 (Pico) QD variant'};
+  return {ok:true, fam,
+    segs:[seg('S18-2','WORLD-BEAM S18-2 barrel'), seg(oc, oc==='NA'?'no output (emitter)':(oc==='VN'?'NPN complementary':'PNP complementary')), seg(mode, mi.m)].concat(cn?[seg('-'+cn, CONN[cn])]:[]),
+    notes: mi.note?[mi.note]:[], warns, mode:mi.m, range:mi.r, light:mi.l,
+    output:out, supply:'10–30 V DC', conn: cn?CONN[cn]:'Integral 2 m cable'};
+}
+
+function parseQS30(raw){
+  const fam = {family:'QS30', famName:'WORLD-BEAM QS30', famDesc:'Long-range rectangular photoelectric, 10–30 V DC, bipolar NPN + PNP outputs.'};
+  const S = stripSuffixes(raw.replace(/^QS30/,''), []); // handle W/30 + special on remainder
+  let rest = S.pn;
+  let conn='';
+  if(rest.endsWith('Q5')){ conn='Q5'; rest=rest.slice(0,-2); }
+  else if(rest.endsWith('Q') && !QS30_MODES[rest]){ conn='Q'; rest=rest.slice(0,-1); }
+  let mi=null, mc=null;
+  for(const code of QS30_ORDER){ if(rest===code){ mc=code; mi=QS30_MODES[code]; break; } }
+  if(!mi) return fail(fam, raw, 'This QS30 part number doesn’t match the known nomenclature');
+  const out = mi.na ? 'None — emitter only' : 'Bipolar (1 NPN + 1 PNP)';
+  const CONN = {'':'Integral 2 m cable (5-wire)','Q':'Integral 5-pin M12 (Euro) QD','Q5':'150 mm pigtail → M12 QD'};
+  const segs=[seg('QS30','WORLD-BEAM QS30 series'), seg(mc, mi.m)];
+  if(conn) segs.push(seg(conn, CONN[conn]));
+  if(S.cable9) segs.push(seg('W/30','9 m (30 ft) cable'));
+  return {ok:true, fam, segs, notes: mi.note?[mi.note]:[], warns:[],
+    mode:mi.m, range:mi.r, light:mi.l, output:out, supply:'10–30 V DC',
+    conn: S.cable9 ? 'Integral 9 m cable' : CONN[conn]};
+}
+
+function parseQ2X(raw){
+  const fam = {family:'Q2X', famName:'Q2X (miniature)', famDesc:'Miniature flat-body photoelectric, 10–30 V DC.'};
+  const m = raw.match(/^Q2X(?:(A|R)(B|P|N)|(K))(FFVS30|FFVS50|FF15|FF30|FF50|FF75|AF150|LAF100|LAF2IR|LAF3IR|LPF|R)(?:-(2M|Q5|Q3|Q))?$/);
+  if(!m) return fail(fam, raw, 'This Q2X part number doesn’t match the known nomenclature');
+  const lo = m[1], oc = m[2]||m[3], mode = m[4], cn = m[5];
+  const mi = Q2X_MODES[mode];
+  const OUT = {B:'Bipolar (1 NPN + 1 PNP)', P:'PNP ×1', N:'NPN ×1', K:'IO-Link + PNP dual channel'};
+  const CONN = {'2M':'Integral 2 m cable','Q':'150 mm pigtail → 4-pin M8 QD','Q3':'150 mm pigtail → 3-pin M8 QD','Q5':'150 mm pigtail → 4-pin M12 QD'};
+  const segs=[seg('Q2X','Q2X series')];
+  if(lo) segs.push(seg(lo, lo==='A'?'light operate':'dark operate'));
+  segs.push(seg(oc, OUT[oc]), seg(mode, mi.m));
+  if(cn) segs.push(seg('-'+cn, CONN[cn]));
+  return {ok:true, fam, segs, notes:[], warns:[], mode:mi.m, range:mi.r, light:mi.l,
+    output:OUT[oc] + (lo ? (' — '+(lo==='A'?'light operate':'dark operate')) : ''), supply:'10–30 V DC',
+    conn: cn?CONN[cn]:'Integral 2 m cable'};
+}
+
+function parseQ20(raw){
+  const fam = {family:'Q20', famName:'WORLD-BEAM Q20', famDesc:'Compact low-cost flat-body photoelectric, 10–30 V DC, single output.'};
+  const S = stripSuffixes(raw.replace(/^Q20/,''), ['QPMA','Q7','Q5','Q']);
+  let rest = S.pn;
+  let m = rest.match(/^(E|EL)$/);
+  if(m){
+    const em = m[1]==='E' ? {m:'Opposed — emitter (visible red)', r:'12 m beam', l:L.RED()} : {m:'Opposed — emitter (infrared)', r:'20 m beam', l:L.IR()};
+    return {ok:true, fam, segs:[seg('Q20','WORLD-BEAM Q20'), seg(m[1], em.m)].concat(S.conn?[seg(S.conn, QD[S.conn])]:[]),
+      notes:[], warns:[], mode:em.m, range:em.r, light:em.l, output:'None — emitter only', supply:'10–30 V DC', conn:connText(S)};
+  }
+  m = rest.match(/^(P|N)(RL|R|LP|LV|DVS|DXL|DL|D|FF50|FF100|FF150)$/);
+  if(!m) return fail(fam, raw, 'This Q20 part number doesn’t match the known nomenclature');
+  const mi = Q20_MODES[m[2]];
+  return {ok:true, fam,
+    segs:[seg('Q20','WORLD-BEAM Q20'), seg(m[1], m[1]==='P'?'PNP output':'NPN output'), seg(m[2], mi.m)].concat(S.conn?[seg(S.conn, QD[S.conn])]:[]).concat(S.cable9?[seg('W/30','9 m cable')]:[]),
+    notes: mi.note?[mi.note]:[], warns:[], mode:mi.m, range:mi.r, light:mi.l,
+    output:(m[1]==='P'?'PNP (sourcing) ×1':'NPN (sinking) ×1'), supply:'10–30 V DC', conn:connText(S)};
+}
+
+function fail(fam, raw, msg){ return {ok:false, fam, raw, msg}; }
+
+function decodePN(input){
+  let s = (input||'').toUpperCase().trim();
+  const has930 = /W\/30/.test(s);
+  s = s.replace(/[.,;]+$/,'');
+  // normalize spaces: keep W/30 semantics, drop other whitespace
+  s = s.replace(/\s+/g,' ');
+  const compact = s.replace(/ /g,'');
+  const c = has930 ? compact : compact; // W/30 survives compaction
+  if(/^QS18/.test(c) || /^QS186/.test(c)) return parseQS18(c);
+  if(/^QS30/.test(c)) return parseQS30(c);
+  if(/^S18-?2/.test(c)) return parseS18(c);
+  if(/^Q4X/.test(c)) return parseQ4X(c);
+  if(/^Q5X/.test(c)) return parseQ5X(c);
+  if(/^Q3X/.test(c)) return parseQ3X(c);
+  if(/^Q2X/.test(c)) return parseQ2X(c);
+  if(/^Q20/.test(c)) return parseQ20(c);
+  return null; // not a recognized family
+}
+
+/* OCR-error tolerant decode: try raw, then common character-confusion fixes */
+function decodeFuzzy(input){
+  let r = decodePN(input);
+  if(r && r.ok) return {res:r, used:input.toUpperCase().replace(/\s+/g,'')};
+  const up = (input||'').toUpperCase();
+  const variants = [];
+  const maps = [ [/G/g,'6'], [/O/g,'0'], [/Z/g,'2'] ];
+  if(!/IR/.test(up)) maps.push([/I/g,'1']);
+  // prefix repairs
+  variants.push(up.replace(/^QSI8/,'QS18').replace(/^0S18/,'QS18').replace(/^OS18/,'QS18').replace(/^QS1B/,'QS18').replace(/^Q518/,'QS18'));
+  for(const [re,to] of maps){ variants.push(up.replace(re,to)); }
+  // combined
+  let all = up; for(const [re,to] of maps){ all = all.replace(re,to); }
+  variants.push(all);
+  for(const v of variants){
+    const r2 = decodePN(v);
+    if(r2 && r2.ok) return {res:r2, used:v.replace(/\s+/g,'')};
+  }
+  return {res:r, used:input.toUpperCase().replace(/\s+/g,'')};
+}
+
+/* ================= SUGGESTIONS ================= */
+function lev(a,b){
+  if(Math.abs(a.length-b.length)>4) return 99;
+  const dp = Array.from({length:a.length+1},(_,i)=>[i].concat(Array(b.length).fill(0)));
+  for(let j=1;j<=b.length;j++) dp[0][j]=j;
+  for(let i=1;i<=a.length;i++) for(let j=1;j<=b.length;j++)
+    dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+  return dp[a.length][b.length];
+}
+function suggestions(pn){
+  const list = [];
+  for(const k of KNOWN){
+    const d = lev(pn, k);
+    if(d<=3) list.push([d,k]);
+  }
+  list.sort((x,y)=>x[0]-y[0]);
+  return list.slice(0,5).map(x=>x[1]);
+}
+function describeShort(pn){
+  const r = decodePN(pn);
+  if(r && r.ok) return r.mode + ' · ' + r.range + ' · ' + r.light.label;
+  return '';
+}
+
+/* ================= DOCUMENTATION LINKS ================= */
+function docFor(r){
+  const lit = n => 'https://info.bannerengineering.com/cs/groups/public/documents/literature/'+n+'.pdf';
+  const f = r.fam.family, fn = r.fam.famName, m = r.mode||'', rng = r.range||'', o = r.output||'';
+  switch(f){
+    case 'QS18':
+      if(/ultrasonic/i.test(fn)) return lit(119287);
+      if(/universal voltage/i.test(fn)) return lit(136003);
+      if(/Expert/i.test(fn)) return /IO-Link/i.test(o) ? lit(196872) : lit(136564);
+      if(/Adjustable-field/i.test(m)){
+        if(/LASER/i.test(m)) return lit(66981);
+        if(/20–100/.test(rng)) return lit(66981);
+        if(/30–120|30–250/.test(rng)) return lit(201339);
+        if(/30–300/.test(rng)) return lit(146923);
+      }
+      if(/Diffuse — LASER/i.test(m)) return lit(118899);
+      return lit(197052);
+    case 'Q4X':
+      if(/Analog/i.test(o)) return lit(185624);
+      if(/IO-Link/i.test(o)) return lit(190074);
+      return lit(181483);
+    case 'Q5X':
+      return (r.notes||[]).join(' ').toLowerCase().includes('jam') ? lit(218902) : lit(208794);
+    case 'Q3X': return lit(181485);
+    case 'S18-2': return lit(170670);
+    case 'QS30':
+      if(/Polarized/i.test(m) && /LASER/i.test(m)) return lit(112355);
+      if(/Diffuse — LASER/i.test(m)) return lit(109027);
+      if(/high-power/i.test(m)) return lit(115011);
+      return lit(119165);
+    case 'Q2X': return /Fixed-field/i.test(m) ? lit(235660) : lit(229259);
+    case 'Q20': return lit(127816);
+  }
+  return null;
+}
+function bannerSearchUrl(pn){
+  return 'https://www.google.com/search?q=' + encodeURIComponent('"'+pn+'" site:bannerengineering.com');
+}
+
+/* ================= RENDER ================= */
+const outEl = document.getElementById('out');
+const pnEl = document.getElementById('pn');
+const clearBtn = document.getElementById('clearbtn');
+const histEl = document.getElementById('hist');
+function loadHist(){ try{ const v = JSON.parse(localStorage.getItem('bannerpn_hist')||'[]'); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
+function saveHist(){ try{ localStorage.setItem('bannerpn_hist', JSON.stringify(history)); }catch(e){} }
+let history = loadHist();
+let histTimer = null;
+
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function render(){
+  const q = pnEl.value.trim();
+  clearBtn.style.display = q ? 'flex' : 'none';
+  if(!q){
+    outEl.innerHTML = '<div class="card empty"><div class="big">⌖</div>Type a Banner part number or tap <b>Scan</b> to read the label with your camera.<br><br>Try: <b>QS18VN6LV</b>, <b>QS18VP6LD</b>, <b>Q4XTBLAF300-Q8</b></div>';
+    return;
+  }
+  // keyword search mode if it doesn't look like a PN
+  if(!/^(QS18|QS186|QS30|S18|Q4X|Q5X|Q3X|Q2X|Q20)/i.test(q.replace(/\s+/g,''))){
+    renderSearch(q); return;
+  }
+  const {res} = decodeFuzzy(q);
+  if(!res){ outEl.innerHTML = '<div class="card empty">Not a recognized Banner family prefix.</div>'; return; }
+  if(!res.ok){ renderFail(res, q); return; }
+  renderResult(res, q);
+}
+
+function lightTile(l){
+  return '<div class="tile light-'+l.kind+'"><div class="k">Light source</div><div class="v">'+esc(l.label)+'</div><div class="d">'+esc(l.detail)+'</div></div>';
+}
+
+function renderResult(r, q){
+  const norm = q.toUpperCase().replace(/\s+(?!W\/30)/g,'').replace(/\s+/g,' ');
+  const known = KNOWN.has(norm) || KNOWN.has(norm.replace(/ /g,''));
+  let html = '<div class="card">';
+  html += '<div class="famline"><span class="famname">'+esc(r.fam.famName)+'</span>';
+  html += known ? '<span class="badge ok">✓ catalog model</span>' : '<span class="badge gen">decoded from nomenclature</span>';
+  html += '</div><div class="famdesc">'+esc(r.fam.famDesc)+'</div>';
+  html += '<div class="tiles">';
+  html += '<div class="tile mode"><div class="k">Sensing mode</div><div class="v">'+esc(r.mode)+'</div>'+(r.modeNote?'<div class="d">'+esc(r.modeNote)+'</div>':'')+'</div>';
+  html += lightTile(r.light);
+  html += '<div class="tile"><div class="k">Range</div><div class="v">'+esc(r.range)+'</div></div>';
+  html += '</div>';
+  html += '<div class="rows">';
+  html += '<div class="row"><span class="rk">Output</span><span class="rv">'+esc(r.output)+'</span></div>';
+  html += '<div class="row"><span class="rk">Supply</span><span class="rv">'+esc(r.supply)+'</span></div>';
+  html += '<div class="row"><span class="rk">Connection</span><span class="rv">'+esc(r.conn)+'</span></div>';
+  if(r.housing) html += '<div class="row"><span class="rk">Housing</span><span class="rv">'+esc(r.housing)+'</span></div>';
+  html += '</div>';
+  for(const w of (r.warns||[])) html += '<div class="warnbox">⚠ '+esc(w)+'</div>';
+  for(const n of (r.notes||[])) html += '<div class="warnbox" style="background:var(--unk-bg);color:var(--ink2)">ℹ '+esc(n)+'</div>';
+  html += '<div class="segs">'+r.segs.map(s=>'<div class="seg"><b>'+esc(s.t)+'</b><span>'+esc(s.d)+'</span></div>').join('')+'</div>';
+  const doc = docFor(r);
+  html += '<div class="links">';
+  if(doc) html += '<a class="linkbtn" href="'+esc(doc)+'" target="_blank" rel="noopener">📄 Datasheet / manual (PDF)</a>';
+  html += '<a class="linkbtn" href="'+esc(bannerSearchUrl(norm))+'" target="_blank" rel="noopener">🔍 Find on Banner.com</a>';
+  html += '</div>';
+  html += '</div>';
+  outEl.innerHTML = html;
+  pushHistory(norm);
+}
+
+function renderFail(res, q){
+  const norm = q.toUpperCase().replace(/\s+/g,'');
+  let html = '<div class="card">';
+  html += '<div class="famline"><span class="famname">'+esc(res.fam.famName)+'</span><span class="badge gen">family recognized</span></div>';
+  html += '<div class="famdesc">'+esc(res.fam.famDesc)+'</div>';
+  html += '<div class="warnbox">⚠ '+esc(res.msg)+'. Check for typos — or it may be a customer-special.</div></div>';
+  const sug = suggestions(norm);
+  if(sug.length){
+    html += '<div class="card sugg"><h3>Did you mean</h3>';
+    for(const s of sug) html += '<button class="suggitem" data-pn="'+esc(s)+'"><b>'+esc(s)+'</b><span>'+esc(describeShort(s))+'</span></button>';
+    html += '</div>';
+  }
+  outEl.innerHTML = html;
+}
+
+function renderSearch(q){
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const hits = [];
+  for(const k of KNOWN){
+    const desc = (k+' '+describeShort(k)).toLowerCase();
+    if(terms.every(t=>desc.includes(t))) hits.push(k);
+    if(hits.length>=30) break;
+  }
+  let html = '<div class="card listwrap"><h3>'+(hits.length?'Models matching “'+esc(q)+'”':'No known models match “'+esc(q)+'” — try “laser”, “retro”, “diffuse”, “clear”…')+'</h3>';
+  for(const h of hits) html += '<button class="modelitem" data-pn="'+esc(h)+'"><b>'+esc(h)+'</b><span>'+esc(describeShort(h))+'</span></button>';
+  html += '</div>';
+  outEl.innerHTML = html;
+}
+
+function pushHistory(pn){
+  // debounce so half-typed part numbers don't pollute history
+  clearTimeout(histTimer);
+  histTimer = setTimeout(()=>{
+    history = [pn].concat(history.filter(h=>h!==pn)).slice(0,15);
+    saveHist();
+    renderHist();
+  }, 1000);
+}
+function renderHist(){
+  histEl.innerHTML = history.map(h=>'<button data-pn="'+esc(h)+'">'+esc(h)+'</button>').join('')
+    + (history.length ? '<button data-histclear="1" style="color:var(--warn)">✕ clear</button>' : '');
+}
+renderHist();
+
+document.addEventListener('click', e=>{
+  if(e.target.closest('[data-histclear]')){ history=[]; saveHist(); renderHist(); return; }
+  const b = e.target.closest('[data-pn]');
+  if(b){ pnEl.value = b.dataset.pn; render(); window.scrollTo({top:0,behavior:'smooth'}); }
+});
+pnEl.addEventListener('input', render);
+clearBtn.addEventListener('click', ()=>{ pnEl.value=''; render(); pnEl.focus(); });
+
+/* model browser */
+const modelList = document.getElementById('modellist');
+const modelSearch = document.getElementById('modelsearch');
+function renderModelList(){
+  const f = modelSearch.value.toLowerCase().split(/\s+/).filter(Boolean);
+  const items = [];
+  for(const k of Array.from(KNOWN).sort()){
+    const desc = describeShort(k);
+    if(f.length && !f.every(t=>(k+' '+desc).toLowerCase().includes(t))) continue;
+    items.push('<button class="modelitem" data-pn="'+esc(k)+'"><b>'+esc(k)+'</b><span>'+esc(desc)+'</span></button>');
+    if(items.length>=60) break;
+  }
+  modelList.innerHTML = items.join('') || '<div class="empty">No matches.</div>';
+}
+modelSearch.addEventListener('input', renderModelList);
+document.getElementById('browse').addEventListener('toggle', e=>{ if(e.target.open) renderModelList(); });
+
+/* ================= FIND BY STYLE ================= */
+const FINDER_GROUPS = {
+  style: ['Any','Diffuse','Polarized retro','Retro (any)','Opposed','Fixed-field BGS','Adjustable-field','Laser distance','Clear object','Convergent','Fiber','Ultrasonic','Contrast'],
+  light: ['Any','Laser','Red LED','Infrared'],
+  out:   ['Any','PNP','NPN','Bipolar','IO-Link','TEACH','Analog','Emitter only'],
+  fam:   ['Any','QS18','S18-2','QS30','Q4X','Q5X','Q3X','Q2X','Q20'],
+  conn:  ['Any','Cable','M12 QD','M8 QD','Pigtail']
+};
+const finderState = {style:'Any', light:'Any', out:'Any', fam:'Any', conn:'Any'};
+let CATALOG = null;
+function catalog(){
+  if(CATALOG) return CATALOG;
+  CATALOG = [];
+  for(const pn of Array.from(KNOWN).sort()){
+    const r = decodePN(pn);
+    if(r && r.ok) CATALOG.push({pn, r});
+  }
+  return CATALOG;
+}
+function styleMatch(modeStr, s){
+  const m = modeStr.toLowerCase();
+  switch(s){
+    case 'Diffuse': return m.includes('diffuse');
+    case 'Polarized retro': return m.includes('polarized');
+    case 'Retro (any)': return m.includes('retroreflective');
+    case 'Opposed': return m.includes('opposed');
+    case 'Fixed-field BGS': return m.includes('fixed-field');
+    case 'Adjustable-field': return m.includes('adjustable');
+    case 'Laser distance': return m.includes('laser distance') || m.includes('laser measurement');
+    case 'Clear object': return m.includes('clear object');
+    case 'Convergent': return m.includes('convergent');
+    case 'Fiber': return m.includes('fiber');
+    case 'Ultrasonic': return m.includes('ultrasonic');
+    case 'Contrast': return m.includes('contrast');
+    default: return true;
+  }
+}
+function lightMatch(r, s){
+  if(s==='Any') return true;
+  return r.light.kind === {Laser:'laser','Red LED':'red',Infrared:'ir'}[s];
+}
+function outMatch(r, s){
+  const o = r.output || '';
+  switch(s){
+    case 'Any': return true;
+    case 'PNP': return /PNP|sourcing/i.test(o) && !/Bipolar/i.test(o);
+    case 'NPN': return /NPN|sinking/i.test(o) && !/Bipolar/i.test(o);
+    case 'Bipolar': return /Bipolar/i.test(o);
+    case 'IO-Link': return /IO-Link/i.test(o);
+    case 'TEACH': return /TEACH/i.test(o) || /TEACH/i.test(r.fam.famName);
+    case 'Analog': return /Analog/i.test(o);
+    case 'Emitter only': return /None/i.test(o);
+    default: return true;
+  }
+}
+function connMatch(r, s){
+  const c = r.conn || '';
+  switch(s){
+    case 'Any': return true;
+    case 'Cable': return /cable/i.test(c);
+    case 'M12 QD': return /M12/i.test(c);
+    case 'M8 QD': return /M8/i.test(c);
+    case 'Pigtail': return /pigtail/i.test(c);
+    default: return true;
+  }
+}
+function findMatches(st){
+  return catalog().filter(({r}) =>
+    styleMatch(r.mode, st.style) && lightMatch(r, st.light) &&
+    outMatch(r, st.out) && connMatch(r, st.conn) &&
+    (st.fam==='Any' || r.fam.family===st.fam)
+  ).map(x=>x.pn);
+}
+/* PN pattern hints, generated from the mode tables */
+function codesForStyle(table, style, lightSel){
+  const out = [];
+  for(const [code, e] of Object.entries(table)){
+    if(!styleMatch(e.m, style)) continue;
+    if(lightSel && lightSel!=='Any'){
+      const k = (typeof e.l==='object') ? e.l.kind : null;
+      if(k !== {Laser:'laser','Red LED':'red',Infrared:'ir'}[lightSel]) continue;
+    }
+    out.push('<code>'+code+'</code> '+esc(shortR(e)));
+  }
+  return out;
+}
+function shortR(e){
+  const lk = e.l && e.l.kind;
+  const lt = lk==='laser'?'laser':lk==='ir'?'IR':lk==='red'?'red':'';
+  return (e.r||'').replace(' cutoff','').replace('cutoff adj. ','adj ') + (lt?' · '+lt:'');
+}
+const FAM_STRUCT = {
+  'QS18': 'QS18 + output <code>[VN</code><span class="pl">=NPN</span> <code>VP</code><span class="pl">=PNP</span> <code>EN/EP</code><span class="pl">=TEACH</span> <code>EK</code><span class="pl">=TEACH+IO-Link</span> <code>AB/RB</code><span class="pl">=bipolar LO/DO]</span> + <code>6</code> + mode + connector <span class="pl">(none=2 m cable,</span> <code>Q</code><span class="pl">=M8 pigtail,</span> <code>Q5</code><span class="pl">=M12 pigtail,</span> <code>Q7</code><span class="pl">=M8,</span> <code>Q8</code><span class="pl">=M12,</span> <code>W/30</code><span class="pl">=9 m cable)</span>',
+  'S18-2': 'S18-2 + <code>[VN</code><span class="pl">=NPN</span> <code>VP</code><span class="pl">=PNP</span> <code>NA</code><span class="pl">=emitter]</span> + mode + <code>[-2M</code><span class="pl">=cable</span> <code>-Q8</code><span class="pl">=M12</span> <code>-Q5</code><span class="pl">=M12 pigtail]</span>',
+  'QS30': 'QS30 + mode + <code>[Q</code><span class="pl">=M12 QD,</span> <code>Q5</code><span class="pl">=M12 pigtail,</span> <span class="pl">none=2 m cable]</span> — <span class="pl">all DC models are bipolar NPN+PNP</span>',
+  'Q2X': 'Q2X + <code>[A</code><span class="pl">=light-op</span> <code>R</code><span class="pl">=dark-op]</span> + <code>[B</code><span class="pl">=bipolar</span> <code>P</code><span class="pl">=PNP</span> <code>N</code><span class="pl">=NPN</span> <code>K</code><span class="pl">=IO-Link]</span> + mode + <code>[-2M -Q -Q3 -Q5]</code>',
+  'Q20': 'Q20 + <code>[P</code><span class="pl">=PNP</span> <code>N</code><span class="pl">=NPN]</span> + mode + <code>[Q7</code><span class="pl">=M8,</span> <code>Q/Q5</code><span class="pl">=pigtail,</span> <span class="pl">none=cable]</span>',
+  'Q4X': 'Q4X + <code>[T</code><span class="pl">=display housing</span> <code>F</code><span class="pl">=flush]</span> + <code>[B N P I U K]</code><span class="pl"> output</span> + <code>[LAF|COD]</code> + range mm + <code>-Q8</code> — <span class="pl">all Class 1 laser</span>',
+  'Q5X': 'Q5X + <code>K</code><span class="pl">=IO-Link</span> + <code>LAF</code> + <code>[2000 3000 5000 10000]</code> + <code>-Q8</code> — <span class="pl">Class 2 laser</span>',
+  'Q3X': 'Q3X + <code>TB</code> + <code>LD</code> + <code>[— 50 100 150 200]</code> + <code>-Q8</code> — <span class="pl">Class 2 laser, bipolar</span>'
+};
+const FAM_TABLES = {'QS18':QS18_MODES, 'S18-2':S18_MODES, 'QS30':QS30_MODES, 'Q2X':Q2X_MODES, 'Q20':Q20_MODES};
+function renderPatternHint(){
+  const el = document.getElementById('patternhint');
+  const fams = finderState.fam==='Any' ? ['QS18'] : [finderState.fam];
+  let html = '';
+  for(const f of fams){
+    html += '<div class="patternbox"><b>'+esc(f)+' pattern:</b><br>' + (FAM_STRUCT[f]||'');
+    if(finderState.style!=='Any' && FAM_TABLES[f]){
+      const codes = codesForStyle(FAM_TABLES[f], finderState.style, finderState.light);
+      if(codes.length) html += '<br><b>'+esc(finderState.style)+' mode codes:</b> ' + codes.join(' &nbsp;·&nbsp; ');
+      else html += '<br><span class="pl">No '+esc(finderState.style.toLowerCase())+' modes in this family.</span>';
+    }
+    html += '</div>';
+  }
+  if(finderState.fam==='Any') html += '<div class="findercount">Showing the QS18 pattern — pick a family chip for others.</div>';
+  el.innerHTML = html;
+}
+function renderFinder(){
+  for(const [group, opts] of Object.entries(FINDER_GROUPS)){
+    const box = document.querySelector('.chips[data-group="'+group+'"]');
+    box.innerHTML = opts.map(o=>'<button class="chip'+(finderState[group]===o?' on':'')+'" data-fgroup="'+group+'" data-fval="'+esc(o)+'">'+esc(o)+'</button>').join('');
+  }
+  renderPatternHint();
+  const pns = findMatches(finderState);
+  document.getElementById('findercount').textContent = pns.length + ' matching catalog model' + (pns.length===1?'':'s');
+  document.getElementById('finderresults').innerHTML = pns.slice(0,50).map(p=>
+    '<button class="modelitem" data-pn="'+esc(p)+'"><b>'+esc(p)+'</b><span>'+esc(describeShort(p))+'</span></button>').join('');
+}
+document.addEventListener('click', e=>{
+  const c = e.target.closest('[data-fgroup]');
+  if(c){ finderState[c.dataset.fgroup] = c.dataset.fval; renderFinder(); }
+});
+document.getElementById('finder').addEventListener('toggle', e=>{ if(e.target.open) renderFinder(); });
+window.__find = findMatches;
+
+/* ================= SCANNER (camera + OCR) ================= */
+const scanner = document.getElementById('scanner');
+const video = document.getElementById('video');
+const snapBtn = document.getElementById('snap');
+const scanStatus = document.getElementById('scanstatus');
+let stream = null, tessWorker = null, tessLoading = null;
+
+function loadTesseract(){
+  if(window.Tesseract) return Promise.resolve();
+  if(tessLoading) return tessLoading;
+  tessLoading = new Promise((res, rej)=>{
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js';
+    s.onload = res; s.onerror = ()=>rej(new Error('Could not load the OCR engine (needs internet).'));
+    document.head.appendChild(s);
+  });
+  return tessLoading;
+}
+async function getWorker(){
+  if(tessWorker) return tessWorker;
+  await loadTesseract();
+  tessWorker = await Tesseract.createWorker('eng');
+  await tessWorker.setParameters({
+    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/. ',
+    tessedit_pageseg_mode: '6'
+  });
+  return tessWorker;
+}
+
+document.getElementById('scanopen').addEventListener('click', async ()=>{
+  scanner.classList.add('open');
+  scanStatus.textContent = 'Starting camera…';
+  snapBtn.disabled = true;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}}});
+    video.srcObject = stream;
+    await video.play();
+    scanStatus.textContent = 'Line up the model number in the box, then tap the button.';
+    snapBtn.disabled = false;
+    getWorker().catch(()=>{}); // preload OCR in background
+  }catch(err){
+    scanStatus.textContent = 'Camera unavailable: ' + (err && err.message ? err.message : err) + ' — you can still type the part number.';
+  }
+});
+function closeScanner(){
+  scanner.classList.remove('open');
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  video.srcObject = null;
+}
+document.getElementById('scanclose').addEventListener('click', closeScanner);
+
+snapBtn.addEventListener('click', async ()=>{
+  if(!video.videoWidth) return;
+  snapBtn.disabled = true;
+  scanStatus.textContent = 'Reading label…';
+  try{
+    // crop the guide-box region of the raw frame (guide: left 5%, top 39%, w 90%, h 22%)
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const sx = vw*0.05, sy = vh*0.39, sw = vw*0.90, sh = vh*0.22;
+    const scale = Math.max(1, Math.min(3, 1600/sw));
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(sw*scale); cv.height = Math.round(sh*scale);
+    const cx = cv.getContext('2d');
+    cx.drawImage(video, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+    // grayscale + contrast stretch
+    const img = cx.getImageData(0,0,cv.width,cv.height);
+    const d = img.data; let mn=255, mx=0;
+    for(let i=0;i<d.length;i+=4){
+      const g = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      d[i]=d[i+1]=d[i+2]=g;
+      if(g<mn)mn=g; if(g>mx)mx=g;
+    }
+    const span = Math.max(1, mx-mn);
+    for(let i=0;i<d.length;i+=4){
+      const v = Math.max(0, Math.min(255, (d[i]-mn)*255/span));
+      d[i]=d[i+1]=d[i+2]=v;
+    }
+    cx.putImageData(img,0,0);
+    const worker = await getWorker();
+    const {data} = await worker.recognize(cv);
+    const text = (data.text||'').toUpperCase();
+    const cands = extractCandidates(text);
+    if(!cands.length){
+      scanStatus.textContent = 'No part number found — move closer, add light, and try again.';
+      snapBtn.disabled = false; return;
+    }
+    // pick first candidate that decodes; else the longest
+    let best = null, bestUsed = null;
+    for(const c of cands){
+      const {res, used} = decodeFuzzy(c);
+      if(res && res.ok){ best = c; bestUsed = used; break; }
+    }
+    if(!best){ cands.sort((a,b)=>b.length-a.length); best = cands[0]; bestUsed = best; }
+    pnEl.value = bestUsed;
+    closeScanner();
+    render();
+    window.scrollTo({top:0});
+  }catch(err){
+    scanStatus.textContent = 'OCR failed: ' + (err && err.message ? err.message : err);
+    snapBtn.disabled = false;
+  }
+});
+
+function extractCandidates(text){
+  const found = new Set();
+  const lines = text.split(/\n+/);
+  for(const lineRaw of lines){
+    for(const s of [lineRaw, lineRaw.replace(/\s+/g,'')]){
+      const re = /(?:QS18|QS30|S18-?2|Q4X|Q5X|Q3X|Q2X|Q20)[A-Z0-9\-\/]{1,18}/g;
+      let m;
+      while((m = re.exec(s))){
+        let t = m[0].replace(/[-\/.]+$/,'');
+        if(t.length >= 5) found.add(t);
+      }
+      // repair common prefix misreads then rescan
+      const fixed = s.replace(/QSI8|0S18|OS18|QS1B|Q518/g,'QS18');
+      if(fixed !== s){
+        let m2; const re2 = /QS18[A-Z0-9\-\/]{1,14}/g;
+        while((m2 = re2.exec(fixed))) found.add(m2[0].replace(/[-\/.]+$/,''));
+      }
+    }
+  }
+  return Array.from(found);
+}
+
+/* expose for testing */
+window.__decode = decodePN;
+window.__decodeFuzzy = decodeFuzzy;
+window.__extract = extractCandidates;
+
+render();
+</script>
+</body>
+</html>
