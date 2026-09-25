@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#111418">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -151,6 +151,14 @@
     padding:8px 14px; border-radius:20px; max-width:92%;}
   .snap{width:72px; height:72px; border-radius:50%; border:5px solid #fff; background:var(--accent);}
   .snap:disabled{opacity:.5;}
+  .scanrow{display:grid; grid-template-columns:1fr auto 1fr; align-items:center; width:100%; max-width:380px;}
+  .scanaux{border:1.5px solid rgba(255,255,255,.75); background:rgba(0,0,0,.45); color:#fff;
+    border-radius:20px; padding:9px 14px; font-size:13px; font-weight:700;}
+  .scanrow #torch{grid-column:1; justify-self:start;}
+  .scanrow .snap{grid-column:2;}
+  .scanrow #automode{grid-column:3; justify-self:end;}
+  .scanaux.on{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+  .scanaux[hidden]{display:none;}
   .closescan{position:absolute; top:calc(env(safe-area-inset-top,0px) + 14px); right:16px;
     width:38px; height:38px; border-radius:50%; border:0; background:rgba(0,0,0,.55); color:#fff; font-size:17px;}
   .scantip{position:absolute; top:calc(env(safe-area-inset-top,0px) + 18px); left:16px; right:66px;
@@ -228,11 +236,15 @@
   <video id="video" playsinline autoplay muted></video>
   <div class="shade top"></div><div class="shade bot"></div><div class="shade left"></div><div class="shade right"></div>
   <div class="guide"></div>
-  <div class="scantip">Line the printed model number up inside the box, hold steady, then tap the button.</div>
+  <div class="scantip">Line the printed model number up inside the box and hold steady. Auto reads it for you; tap the button to force a capture.</div>
   <button class="closescan" id="scanclose">✕</button>
   <div class="scanui">
     <div id="scanstatus">Starting camera…</div>
-    <button class="snap" id="snap" aria-label="Capture"></button>
+    <div class="scanrow">
+      <button class="scanaux" id="torch" hidden aria-label="Flashlight">🔦</button>
+      <button class="snap" id="snap" aria-label="Capture"></button>
+      <button class="scanaux" id="automode" aria-pressed="true">Auto: on</button>
+    </div>
   </div>
 </div>
 
@@ -733,44 +745,98 @@ function decodePN(input){
   return null; // not a recognized family
 }
 
-/* OCR-error tolerant decode: try raw, then common character-confusion fixes */
-function decodeFuzzy(input){
-  let r = decodePN(input);
-  if(r && r.ok) return {res:r, used:input.toUpperCase().replace(/\s+/g,'')};
-  const up = (input||'').toUpperCase();
-  const variants = [];
-  const maps = [ [/G/g,'6'], [/O/g,'0'], [/Z/g,'2'] ];
-  if(!/IR/.test(up)) maps.push([/I/g,'1']);
-  // prefix repairs
-  variants.push(up.replace(/^QSI8/,'QS18').replace(/^0S18/,'QS18').replace(/^OS18/,'QS18').replace(/^QS1B/,'QS18').replace(/^Q518/,'QS18'));
-  for(const [re,to] of maps){ variants.push(up.replace(re,to)); }
-  // combined
-  let all = up; for(const [re,to] of maps){ all = all.replace(re,to); }
-  variants.push(all);
-  for(const v of variants){
-    const r2 = decodePN(v);
-    if(r2 && r2.ok) return {res:r2, used:v.replace(/\s+/g,'')};
+/* ================= OCR / TYPO REPAIR =================
+   Two passes, both shown to the user on the result card ("read as …"):
+   1. Grammar-aware: swap look-alike characters (6↔E/G, 8↔B, 0↔O/D/Q, 1↔I/L,
+      5↔S, 2↔Z, 7↔T) a few positions at a time and keep the first variant a
+      family parser accepts. The parsers know which slots are digits, so a
+      legitimate letter elsewhere is never touched — and it works for numbers
+      that are not in the catalog list.
+   2. Catalog-aware: weighted edit distance against KNOWN with look-alike swaps
+      nearly free. Accepted only when the difference is tiny (one dropped or
+      extra character at most) and the match is unambiguous, so an unlisted /
+      custom number stays as typed. */
+const CONFUSE = {
+  O:['0','Q'], D:['0'], Q:['0','O'], I:['1'], L:['1'], Z:['2'], S:['5'], G:['6'], E:['6'], B:['8'], T:['7'],
+  '0':['O','D','Q'], '1':['I','L'], '2':['Z'], '5':['S'], '6':['G','E'], '7':['T'], '8':['B']
+};
+function isConfusable(a,b){ return a!==b && (CONFUSE[a]||[]).includes(b); }
+function knownKey(pn){ return pn.toUpperCase().replace(/\s+/g,'').replace(/(W\/?\d+)$/,' $1'); }
+function isKnown(pn){ const k = knownKey(pn); return KNOWN.has(k) || KNOWN.has(k.replace(/\s+/g,'')); }
+
+const REPAIR_MAX_FLIPS = 4, REPAIR_MAX_TRIES = 4000;
+function grammarRepair(compact){
+  const pos = [];
+  for(let i=0;i<compact.length;i++) if(CONFUSE[compact[i]]) pos.push(i);
+  if(!pos.length) return null;
+  const chars = compact.split('');
+  let tries = 0;
+  for(let k=1; k<=Math.min(REPAIR_MAX_FLIPS, pos.length); k++){
+    let known = null, first = null;
+    const rec = (start, left) => {
+      if(known || tries>REPAIR_MAX_TRIES) return;
+      if(left===0){
+        tries++;
+        const v = chars.join('');
+        const r = decodePN(v);
+        if(r && r.ok){ if(isKnown(v)) known = {v,r}; else if(!first) first = {v,r}; }
+        return;
+      }
+      for(let i=start; i<=pos.length-left && !known; i++){
+        const p = pos[i], orig = chars[p];
+        for(const alt of CONFUSE[orig]){ chars[p] = alt; rec(i+1, left-1); if(known) break; }
+        chars[p] = orig;
+      }
+    };
+    rec(0, k);
+    const hit = known || first;   // same number of swaps: prefer a catalog model
+    if(hit) return {res:hit.r, used:hit.v, repaired:true};
+    if(tries>REPAIR_MAX_TRIES) break;
   }
-  return {res:r, used:input.toUpperCase().replace(/\s+/g,'')};
+  return null;
+}
+
+/* Edit distance where look-alike substitutions are nearly free. */
+const W_CONF = 0.2, W_INDEL = 0.6, W_SUB = 1;
+function wdist(a, b){
+  if(Math.abs(a.length-b.length) > 4) return 99;
+  const dp = Array.from({length:a.length+1}, (_,i)=>{ const row = new Array(b.length+1).fill(0); row[0] = i*W_INDEL; return row; });
+  for(let j=1;j<=b.length;j++) dp[0][j] = j*W_INDEL;
+  for(let i=1;i<=a.length;i++) for(let j=1;j<=b.length;j++){
+    const ca = a[i-1], cb = b[j-1];
+    const sub = ca===cb ? 0 : (isConfusable(ca,cb) ? W_CONF : W_SUB);
+    dp[i][j] = Math.min(dp[i-1][j]+W_INDEL, dp[i][j-1]+W_INDEL, dp[i-1][j-1]+sub);
+  }
+  return dp[a.length][b.length];
+}
+function nearestKnown(compact, max){
+  const out = [];
+  for(const k of KNOWN){
+    const d = wdist(compact, k.replace(/\s+/g,''));
+    if(d<=max) out.push({k, d});
+  }
+  return out.sort((x,y)=>x.d-y.d);
+}
+
+function decodeFuzzy(input){
+  const compact = (input||'').toUpperCase().replace(/[.,;:]+$/,'').replace(/\s+/g,'');
+  const r = decodePN(compact);
+  if(r && r.ok) return {res:r, used:compact};
+  const g = grammarRepair(compact);
+  if(g) return g;
+  // one dropped / extra character (plus look-alike swaps), only when unambiguous
+  const near = nearestKnown(compact, 0.9);
+  if(near.length && (near.length===1 || near[0].d < near[1].d)){
+    const k = near[0].k.replace(/\s+/g,'');
+    const r2 = decodePN(k);
+    if(r2 && r2.ok) return {res:r2, used:k, repaired:true};
+  }
+  return {res:r, used:compact};
 }
 
 /* ================= SUGGESTIONS ================= */
-function lev(a,b){
-  if(Math.abs(a.length-b.length)>4) return 99;
-  const dp = Array.from({length:a.length+1},(_,i)=>[i].concat(Array(b.length).fill(0)));
-  for(let j=1;j<=b.length;j++) dp[0][j]=j;
-  for(let i=1;i<=a.length;i++) for(let j=1;j<=b.length;j++)
-    dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
-  return dp[a.length][b.length];
-}
 function suggestions(pn){
-  const list = [];
-  for(const k of KNOWN){
-    const d = lev(pn, k);
-    if(d<=3) list.push([d,k]);
-  }
-  list.sort((x,y)=>x[0]-y[0]);
-  return list.slice(0,5).map(x=>x[1]);
+  return nearestKnown(pn.replace(/\s+/g,''), 2.2).slice(0,5).map(x=>x.k);
 }
 function describeShort(pn){
   const r = decodePN(pn);
@@ -826,6 +892,7 @@ function loadHist(){ try{ const v = JSON.parse(localStorage.getItem('bannerpn_hi
 function saveHist(){ try{ localStorage.setItem('bannerpn_hist', JSON.stringify(history)); }catch(e){} }
 let history = loadHist();
 let histTimer = null;
+let scanRaw = null;   // what the camera actually read, when the value in the box came from a scan
 
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
@@ -859,7 +926,8 @@ function renderResult(r, q, typed){
   const known = KNOWN.has(norm) || KNOWN.has(compact);
   let html = '<div class="card">';
   // say so when the fuzzy pass repaired what was typed or scanned
-  if(typed && norm !== typed.toUpperCase().trim().replace(/\s+/g,' ')) html += '<div class="fixedpn">Read as <b>'+esc(norm)+'</b></div>';
+  if(scanRaw && scanRaw !== compact) html += '<div class="fixedpn">Scanned <b>'+esc(scanRaw)+'</b> · read as <b>'+esc(norm)+'</b></div>';
+  else if(typed && norm !== typed.toUpperCase().trim().replace(/\s+/g,' ')) html += '<div class="fixedpn">Read as <b>'+esc(norm)+'</b></div>';
   html += '<div class="famline"><span class="famname">'+esc(r.fam.famName)+'</span>';
   html += known ? '<span class="badge ok">✓ catalog model</span>' : '<span class="badge gen">decoded from nomenclature</span>';
   html += '</div><div class="famdesc">'+esc(r.fam.famDesc)+'</div>';
@@ -892,6 +960,7 @@ function renderFail(res, q){
   let html = '<div class="card">';
   html += '<div class="famline"><span class="famname">'+esc(res.fam.famName)+'</span><span class="badge gen">family recognized</span></div>';
   html += '<div class="famdesc">'+esc(res.fam.famDesc)+'</div>';
+  if(scanRaw && scanRaw !== norm) html += '<div class="fixedpn">Scanned <b>'+esc(scanRaw)+'</b></div>';
   html += '<div class="warnbox">⚠ '+esc(res.msg)+'. Check for typos — or it may be a customer-special.</div></div>';
   const sug = suggestions(norm);
   if(sug.length){
@@ -934,10 +1003,10 @@ renderHist();
 document.addEventListener('click', e=>{
   if(e.target.closest('[data-histclear]')){ history=[]; saveHist(); renderHist(); return; }
   const b = e.target.closest('[data-pn]');
-  if(b){ pnEl.value = b.dataset.pn; render(); window.scrollTo({top:0,behavior:'smooth'}); }
+  if(b){ pnEl.value = b.dataset.pn; scanRaw = null; render(); window.scrollTo({top:0,behavior:'smooth'}); }
 });
-pnEl.addEventListener('input', render);
-clearBtn.addEventListener('click', ()=>{ pnEl.value=''; render(); pnEl.focus(); });
+pnEl.addEventListener('input', ()=>{ scanRaw = null; render(); });
+clearBtn.addEventListener('click', ()=>{ pnEl.value=''; scanRaw = null; render(); pnEl.focus(); });
 
 /* model browser */
 const modelList = document.getElementById('modellist');
@@ -1099,8 +1168,13 @@ window.__find = findMatches;
 const scanner = document.getElementById('scanner');
 const video = document.getElementById('video');
 const snapBtn = document.getElementById('snap');
+const torchBtn = document.getElementById('torch');
+const autoBtn = document.getElementById('automode');
 const scanStatus = document.getElementById('scanstatus');
 let stream = null, tessWorker = null, tessLoading = null;
+let scanAuto = (()=>{ try{ return localStorage.getItem('bannerpn_scanauto') !== '0'; }catch(e){ return true; } })();
+let scanGen = 0;   // bumped whenever the scanner closes or the mode changes; a running auto loop sees it and stops
+let torchOn = false;
 
 function loadTesseract(){
   if(window.Tesseract) return Promise.resolve();
@@ -1119,103 +1193,191 @@ async function getWorker(){
   tessWorker = await Tesseract.createWorker('eng');
   await tessWorker.setParameters({
     tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/. ',
-    tessedit_pageseg_mode: '6'
+    tessedit_pageseg_mode: '7'   // the guide box holds a single line of text
   });
   return tessWorker;
 }
+/* OCR jobs run one at a time — the auto loop and a manual capture can overlap */
+let ocrChain = Promise.resolve();
+function ocrQueue(fn){ const p = ocrChain.then(fn, fn); ocrChain = p.catch(()=>{}); return p; }
+function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+function updateAutoBtn(){
+  autoBtn.classList.toggle('on', scanAuto);
+  autoBtn.setAttribute('aria-pressed', String(scanAuto));
+  autoBtn.textContent = scanAuto ? 'Auto: on' : 'Auto: off';
+}
+autoBtn.addEventListener('click', ()=>{
+  scanAuto = !scanAuto;
+  try{ localStorage.setItem('bannerpn_scanauto', scanAuto?'1':'0'); }catch(e){}
+  updateAutoBtn();
+  scanGen++;
+  if(scanAuto) startAutoLoop();
+  else scanStatus.textContent = 'Line up the model number in the box, then tap the button.';
+});
 
 document.getElementById('scanopen').addEventListener('click', async ()=>{
   scanner.classList.add('open');
   scanStatus.textContent = 'Starting camera…';
-  snapBtn.disabled = true;
+  snapBtn.disabled = true; torchBtn.hidden = true; torchBtn.classList.remove('on'); torchOn = false;
+  updateAutoBtn();
   try{
-    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}}});
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}, width:{ideal:2560}, height:{ideal:1440}}});
     video.srcObject = stream;
     await video.play();
-    scanStatus.textContent = 'Line up the model number in the box, then tap the button.';
     snapBtn.disabled = false;
-    getWorker().catch(()=>{}); // preload OCR in background
+    // flashlight, where the browser exposes it (Android Chrome; iOS Safari does not)
+    const track = stream.getVideoTracks()[0];
+    const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+    if(caps && caps.torch) torchBtn.hidden = false;
+    if(scanAuto) startAutoLoop();
+    else { scanStatus.textContent = 'Line up the model number in the box, then tap the button.'; getWorker().catch(()=>{}); }
   }catch(err){
     scanStatus.textContent = 'Camera unavailable: ' + (err && err.message ? err.message : err) + ' — you can still type the part number.';
   }
 });
+torchBtn.addEventListener('click', async ()=>{
+  const track = stream && stream.getVideoTracks()[0];
+  if(!track) return;
+  torchOn = !torchOn;
+  try{ await track.applyConstraints({advanced:[{torch:torchOn}]}); torchBtn.classList.toggle('on', torchOn); }
+  catch(e){ torchOn = false; torchBtn.classList.remove('on'); torchBtn.hidden = true; }
+});
 function closeScanner(){
+  scanGen++;
   scanner.classList.remove('open');
   if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
   video.srcObject = null;
 }
 document.getElementById('scanclose').addEventListener('click', closeScanner);
+// release the camera if the app is backgrounded mid-scan
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden && scanner.classList.contains('open')) closeScanner(); });
 
+/* Grab the guide-box region, clean it up, OCR it, and pick the best part-number candidate. */
+async function readFrame(opts){
+  opts = opts || {};
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if(!vw) return null;
+  // guide box: left 5%, top 39%, w 90%, h 22% (matches the CSS overlay)
+  const sx = vw*0.05, sy = vh*0.39, sw = vw*0.90, sh = vh*0.22;
+  const scale = Math.max(0.5, Math.min(3, 1800/sw));   // normalise the crop to ~1800 px wide
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(sw*scale); cv.height = Math.round(sh*scale);
+  const cx = cv.getContext('2d', {willReadFrequently:true});
+  cx.drawImage(video, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+  // grayscale + contrast stretch
+  const img = cx.getImageData(0,0,cv.width,cv.height);
+  const d = img.data; let mn=255, mx=0;
+  for(let i=0;i<d.length;i+=4){
+    const g = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+    d[i]=d[i+1]=d[i+2]=g;
+    if(g<mn)mn=g; if(g>mx)mx=g;
+  }
+  const span = Math.max(1, mx-mn);
+  for(let i=0;i<d.length;i+=4){
+    const v = Math.max(0, Math.min(255, (d[i]-mn)*255/span));
+    d[i]=d[i+1]=d[i+2]=v;
+  }
+  cx.putImageData(img,0,0);
+  const worker = await getWorker();
+  let text = await ocrQueue(async ()=>{
+    let t = (await worker.recognize(cv)).data.text || '';
+    if(opts.fallbackBlock && !extractCandidates(t.toUpperCase()).length){
+      // nothing on the single line — retry treating the box as a block of text
+      await worker.setParameters({tessedit_pageseg_mode:'6'});
+      try{ t = (await worker.recognize(cv)).data.text || ''; }
+      finally{ await worker.setParameters({tessedit_pageseg_mode:'7'}); }
+    }
+    return t;
+  });
+  text = text.toUpperCase();
+  return {text, best: rankCandidates(extractCandidates(text))};
+}
+function rankCandidates(cands){
+  const scored = cands.map(raw=>{
+    const f = decodeFuzzy(raw);
+    return {raw, used:f.used, ok:!!(f.res && f.res.ok), known:isKnown(f.used), repaired:!!f.repaired};
+  });
+  scored.sort((a,b)=> (b.ok-a.ok) || (b.known-a.known) || (a.repaired-b.repaired) || (b.used.length-a.used.length));
+  return scored[0] || null;
+}
+function acceptScan(best){
+  if(navigator.vibrate) navigator.vibrate(40);
+  scanRaw = best.raw.toUpperCase().replace(/\s+/g,'');
+  pnEl.value = best.used;
+  closeScanner();
+  render();
+  window.scrollTo({top:0});
+}
+
+/* Auto mode: OCR frame after frame; accept once the same decodable number shows up
+   in 2 of the last 3 frames, or the same undecodable text in 3 frames in a row
+   (so a number the app doesn't know can still be scanned in and edited). */
+async function startAutoLoop(){
+  const gen = ++scanGen;
+  scanStatus.textContent = 'Loading OCR engine…';
+  try{ await getWorker(); }catch(err){ scanStatus.textContent = err.message; return; }
+  if(gen!==scanGen) return;
+  scanStatus.textContent = 'Looking for a part number…';
+  const votes = [];
+  while(gen===scanGen && scanner.classList.contains('open')){
+    if(!video.videoWidth){ await sleep(100); continue; }
+    const t0 = performance.now();
+    let r = null;
+    try{ r = await readFrame(); }
+    catch(err){ scanStatus.textContent = 'OCR failed: ' + (err && err.message ? err.message : err); await sleep(800); continue; }
+    if(gen!==scanGen) return;
+    const best = r && r.best;
+    votes.push(best ? best.used : null); if(votes.length>3) votes.shift();
+    if(best){
+      const n = votes.filter(v=>v===best.used).length;
+      const need = best.ok ? 2 : 3;
+      if(n>=need){ acceptScan(best); return; }
+      scanStatus.textContent = (best.ok ? 'Reading ' : 'Not recognized: ') + best.used + ' — hold steady… ' + n + '/' + need;
+    } else {
+      scanStatus.textContent = 'Looking for a part number…';
+    }
+    const dt = performance.now()-t0;
+    if(dt<120) await sleep(120-dt);
+  }
+}
+
+/* Manual capture: one careful read (with a block-mode retry). Also works as a
+   "take what you see now" override while auto mode is running. */
 snapBtn.addEventListener('click', async ()=>{
   if(!video.videoWidth) return;
+  const wasAuto = scanAuto; scanGen++;   // pause the auto loop
   snapBtn.disabled = true;
   scanStatus.textContent = 'Reading label…';
   try{
-    // crop the guide-box region of the raw frame (guide: left 5%, top 39%, w 90%, h 22%)
-    const vw = video.videoWidth, vh = video.videoHeight;
-    const sx = vw*0.05, sy = vh*0.39, sw = vw*0.90, sh = vh*0.22;
-    const scale = Math.max(1, Math.min(3, 1600/sw));
-    const cv = document.createElement('canvas');
-    cv.width = Math.round(sw*scale); cv.height = Math.round(sh*scale);
-    const cx = cv.getContext('2d');
-    cx.drawImage(video, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
-    // grayscale + contrast stretch
-    const img = cx.getImageData(0,0,cv.width,cv.height);
-    const d = img.data; let mn=255, mx=0;
-    for(let i=0;i<d.length;i+=4){
-      const g = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
-      d[i]=d[i+1]=d[i+2]=g;
-      if(g<mn)mn=g; if(g>mx)mx=g;
-    }
-    const span = Math.max(1, mx-mn);
-    for(let i=0;i<d.length;i+=4){
-      const v = Math.max(0, Math.min(255, (d[i]-mn)*255/span));
-      d[i]=d[i+1]=d[i+2]=v;
-    }
-    cx.putImageData(img,0,0);
-    const worker = await getWorker();
-    const {data} = await worker.recognize(cv);
-    const text = (data.text||'').toUpperCase();
-    const cands = extractCandidates(text);
-    if(!cands.length){
-      scanStatus.textContent = 'No part number found — move closer, add light, and try again.';
-      snapBtn.disabled = false; return;
-    }
-    // pick first candidate that decodes; else the longest
-    let best = null, bestUsed = null;
-    for(const c of cands){
-      const {res, used} = decodeFuzzy(c);
-      if(res && res.ok){ best = c; bestUsed = used; break; }
-    }
-    if(!best){ cands.sort((a,b)=>b.length-a.length); best = cands[0]; bestUsed = best; }
-    pnEl.value = bestUsed;
-    closeScanner();
-    render();
-    window.scrollTo({top:0});
+    const r = await readFrame({fallbackBlock:true});
+    if(r && r.best){ acceptScan(r.best); return; }
+    scanStatus.textContent = 'No part number found — move closer, add light, and try again.';
   }catch(err){
     scanStatus.textContent = 'OCR failed: ' + (err && err.message ? err.message : err);
-    snapBtn.disabled = false;
   }
+  snapBtn.disabled = false;
+  if(wasAuto && scanner.classList.contains('open')){ await sleep(1500); if(scanner.classList.contains('open')) startAutoLoop(); }
 });
 
+/* Pull part-number candidates out of OCR text. Whole tokens are kept as well as
+   family-prefixed runs, so the repair pass can fix a misread prefix (OS18 → QS18). */
 function extractCandidates(text){
   const found = new Set();
-  const lines = text.split(/\n+/);
-  for(const lineRaw of lines){
-    for(const s of [lineRaw, lineRaw.replace(/\s+/g,'')]){
-      const re = /(?:QS18|QS30|S18-?2|Q4X|Q5X|Q3X|Q2X|Q20)[A-Z0-9\-\/]{1,18}/g;
-      let m;
-      while((m = re.exec(s))){
-        let t = m[0].replace(/[-\/.]+$/,'');
-        if(t.length >= 5) found.add(t);
-      }
-      // repair common prefix misreads then rescan
-      const fixed = s.replace(/QSI8|0S18|OS18|QS1B|Q518/g,'QS18');
-      if(fixed !== s){
-        let m2; const re2 = /QS18[A-Z0-9\-\/]{1,14}/g;
-        while((m2 = re2.exec(fixed))) found.add(m2[0].replace(/[-\/.]+$/,''));
-      }
+  const FAM = /(?:QS18|QS30|S18-?2|Q4X|Q5X|Q3X|Q2X|Q20)[A-Z0-9\-\/]{1,18}/g;
+  for(const lineRaw of text.split(/\n+/)){
+    const line = lineRaw.replace(/[^A-Z0-9\-\/. ]/g,' ');
+    for(const tok of line.split(/\s+/)){
+      const t = tok.replace(/^[-\/.]+|[-\/.]+$/g,'');
+      if(t.length>=5 && t.length<=24 && /\d/.test(t)) found.add(t);
     }
+    for(const s of [line, line.replace(/\s+/g,'')]){
+      let m; FAM.lastIndex = 0;
+      while((m = FAM.exec(s))){ const t = m[0].replace(/[-\/.]+$/,''); if(t.length>=5) found.add(t); }
+    }
+    // cable-length suffix is printed with a space ("QS18VP6LV W/30") — keep it attached
+    const w = line.match(/([A-Z0-9\-\/]{5,})\s+(W\/?\d{1,3})\b/);
+    if(w) found.add(w[1]+w[2]);
   }
   return Array.from(found);
 }
@@ -1224,6 +1386,7 @@ function extractCandidates(text){
 window.__decode = decodePN;
 window.__decodeFuzzy = decodeFuzzy;
 window.__extract = extractCandidates;
+window.__suggest = suggestions;
 
 render();
 </script>
