@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 /* Decoder regression test. Run: node test-decoder.js
-   Pulls the pure decoder code (data tables, parsers, OCR repair) out of index.html
+   Loads the pure decoder code (js/data.js, js/decoder.js)
    and checks (1) every catalog model decodes, (2) OCR-damaged inputs are repaired
    to the expected number, (3) unlisted / partial inputs are left alone. */
 const fs = require('fs');
-const src = fs.readFileSync(__dirname + '/index.html', 'utf8');
-const a = src.indexOf('"use strict";'), b = src.indexOf('/* ================= RENDER');
-if(a<0 || b<0) throw new Error('markers not found in index.html');
-const ex = src.match(/function extractCandidates\(text\)\{[\s\S]*?\n\}\n/);
-if(!ex) throw new Error('extractCandidates not found');
-const api = new Function(src.slice(a,b) + ex[0] + '\nreturn {KNOWN, decodePN, decodeFuzzy, suggestions, extractCandidates};')();
+const read = f => fs.readFileSync(__dirname + "/" + f, "utf8").replace(/^"use strict";\n/, "");
+const core = read("js/data.js") + "\n" + read("js/decoder.js");
+const ex = read("js/scanner.js").match(/function extractCandidates\(text\)\{[\s\S]*?\n\}\n/);
+if(!ex) throw new Error("extractCandidates not found in js/scanner.js");
+const api = new Function(core + ex[0] + '\nreturn {KNOWN, decodePN, decodeFuzzy, suggestions, extractCandidates};')();
 
 let pass = 0, fail = 0;
 function check(name, ok, detail){ if(ok) pass++; else { fail++; console.log('FAIL', name, detail||''); } }
