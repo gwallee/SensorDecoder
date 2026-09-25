@@ -146,3 +146,32 @@ footer{margin-top:22px; font-size:11.5px; color:var(--ink2); line-height:1.55; t
   width:38px; height:38px; border-radius:50%; border:0; background:rgba(0,0,0,.55); color:#fff; font-size:17px;}
 .scantip{position:absolute; top:calc(env(safe-area-inset-top,0px) + 18px); left:16px; right:66px;
   color:#fff; font-size:13px; text-shadow:0 1px 3px rgba(0,0,0,.8);}
+
+/* compare */
+.cmpbar:empty{display:none;}
+.cmpbar{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px;
+  background:color-mix(in srgb, var(--accent) 16%, var(--card)); border:1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius:12px; padding:7px 10px; font-size:12.5px; color:var(--ink);}
+.cmpbar b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+.cmpbar button{border:0; background:transparent; color:var(--ink2); font-size:15px; padding:2px 4px;}
+.linkbtn.on{background:color-mix(in srgb, var(--accent) 22%, var(--card)); border-color:color-mix(in srgb, var(--accent) 50%, transparent);}
+.cmp table{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px; table-layout:fixed;}
+.cmp th, .cmp td{padding:7px 6px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left; word-wrap:break-word;}
+.cmp thead th{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; color:var(--ink);}
+.cmp thead th:first-child, .cmp tbody th{width:26%; color:var(--ink2); font-weight:600; font-size:11.5px;}
+.cmp tbody tr.diff td{background:color-mix(in srgb, var(--accent) 14%, transparent); font-weight:600;}
+.cmp tbody tr.diff th{color:var(--warn);}
+.cmpfoot{font-size:12px; color:var(--ink2); margin-top:10px;}
+.cmplink{border:0; background:transparent; color:var(--ink); font-size:12px; font-weight:650; padding:0; text-decoration:underline;}
+/* companions */
+.comp{margin-top:14px; border-top:1px solid var(--line); padding-top:10px;}
+.comph{font-size:13px; font-weight:650; color:var(--ink2); margin-bottom:6px;}
+.compg{margin-top:8px;}
+.compt{font-size:10.5px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; color:var(--ink2); margin:0 2px 5px;}
+.compitem{display:flex; align-items:baseline; gap:10px; width:100%; text-align:left; border:1px solid var(--line);
+  background:var(--card); border-radius:10px; padding:7px 10px; margin-bottom:5px; color:var(--ink); text-decoration:none; font-size:12px;}
+.compitem b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; flex:0 0 auto;}
+.compitem span{color:var(--ink2); flex:1;}
+a.compitem::after{content:"↗"; color:var(--ink2); font-size:11px;}
+/* alternatives */
+details.alt summary .cnt{background:var(--unk-bg); color:var(--ink2); border-radius:20px; padding:2px 8px; font-size:11px; margin-left:auto; margin-right:8px;}

@@ -10,6 +10,18 @@ function saveHist(){ try{ localStorage.setItem('bannerpn_hist', JSON.stringify(h
 let history = loadHist();
 let histTimer = null;
 let scanRaw = null;   // what the camera actually read, when the value in the box came from a scan
+const cmpBar = document.getElementById('cmpbar');
+let compareA = (()=>{ try{ return localStorage.getItem('bannerpn_compare') || null; }catch(e){ return null; } })();
+function setCompare(pn){
+  compareA = pn || null;
+  try{ if(compareA) localStorage.setItem('bannerpn_compare', compareA); else localStorage.removeItem('bannerpn_compare'); }catch(e){}
+  renderCompareBar();
+}
+function renderCompareBar(){
+  cmpBar.innerHTML = compareA
+    ? '<span>Comparing with <b data-pn="'+esc(compareA)+'">'+esc(compareA)+'</b> — open another part number</span><button data-cmpclear="1" aria-label="Stop comparing">✕</button>'
+    : '';
+}
 
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
@@ -66,10 +78,69 @@ function renderResult(r, q, typed){
   html += '<div class="links">';
   if(doc) html += '<a class="linkbtn" href="'+esc(doc)+'" target="_blank" rel="noopener">📄 Datasheet / manual (PDF)</a>';
   html += '<a class="linkbtn" href="'+esc(bannerSearchUrl(norm))+'" target="_blank" rel="noopener">🔍 Find on Banner.com</a>';
+  html += compareA===norm
+    ? '<button class="linkbtn on" data-cmpclear="1">⇄ Comparing from this one</button>'
+    : '<button class="linkbtn" data-cmpset="'+esc(norm)+'">⇄ Compare with another</button>';
   html += '</div>';
+  html += renderCompanions(compact, r);
   html += '</div>';
-  outEl.innerHTML = html;
+  html += renderAlternatives(compact, r);
+  const cmp = (compareA && compareA!==norm) ? renderCompare(compareA, norm, r) : '';
+  outEl.innerHTML = cmp + html;
   pushHistory(norm);
+}
+
+/* "Goes with it": emitter/receiver pairings decode in-app, accessories link to Banner.com */
+function renderCompanions(compact, r){
+  const groups = companions(compact, r);
+  if(!groups.length) return '';
+  let html = '<div class="comp"><div class="comph">Goes with it</div>';
+  for(const g of groups){
+    html += '<div class="compg"><div class="compt">'+esc(g.title)+'</div>';
+    for(const it of g.items){
+      html += it.decode
+        ? '<button class="compitem" data-pn="'+esc(it.pn)+'"><b>'+esc(it.pn)+'</b><span>'+esc(it.why)+'</span></button>'
+        : '<a class="compitem" href="'+esc(bannerSearchUrl(it.pn))+'" target="_blank" rel="noopener"><b>'+esc(it.pn)+'</b><span>'+esc(it.why)+'</span></a>';
+    }
+    html += '</div>';
+  }
+  return html + '</div>';
+}
+
+/* Cross-reference: same sensing mode, different output / connector / family */
+function renderAlternatives(compact, r){
+  const {same, other} = alternatives(compact, r);
+  if(!same.length && !other.length) return '';
+  const item = a => '<button class="modelitem" data-pn="'+esc(a.pn)+'"><b>'+esc(a.pn)+'</b><span>'+esc(a.why)+'</span></button>';
+  let html = '<details class="alt"><summary>Alternatives — same sensing mode <span class="cnt">'+(same.length+other.length)+'</span></summary><div class="inner">';
+  if(same.length){ html += '<h3>Same family, other output or connector</h3>' + same.slice(0,12).map(item).join(''); if(same.length>12) html += '<div class="findercount">+'+(same.length-12)+' more in the catalog browser</div>'; }
+  if(other.length){ html += '<h3>Other families</h3>' + other.slice(0,10).map(item).join(''); if(other.length>10) html += '<div class="findercount">+'+(other.length-10)+' more</div>'; }
+  return html + '</div></details>';
+}
+
+/* Side-by-side comparison of two decoded part numbers, differences highlighted */
+function renderCompare(pnA, pnB, rB){
+  const fa = decodeFuzzy(pnA), rA = fa.res;
+  if(!rA || !rA.ok) return '';
+  const rows = [
+    ['Family', r=>r.fam.famName], ['Sensing mode', r=>r.mode], ['Range', r=>r.range],
+    ['Light', r=>r.light.label + (r.light.detail?' · '+r.light.detail:'')], ['Output', r=>r.output],
+    ['Supply', r=>r.supply], ['Connection', r=>r.conn], ['Housing', r=>r.housing||''],
+    ['Catalog model', r=>isKnown(r.__pn) ? 'yes' : 'not listed']
+  ];
+  rA.__pn = pnA; rB.__pn = pnB;
+  let html = '<div class="card cmp"><div class="famline"><span class="famname">Compare</span><span class="badge gen">differences highlighted</span></div>';
+  html += '<table><thead><tr><th></th><th data-pn="'+esc(pnA)+'">'+esc(pnA)+'</th><th>'+esc(pnB)+'</th></tr></thead><tbody>';
+  let diffs = 0;
+  for(const [label, get] of rows){
+    const a = get(rA)||'', b = get(rB)||'';
+    if(!a && !b) continue;
+    const d = a!==b; if(d) diffs++;
+    html += '<tr class="'+(d?'diff':'')+'"><th>'+esc(label)+'</th><td>'+esc(a)+'</td><td>'+esc(b)+'</td></tr>';
+  }
+  html += '</tbody></table>';
+  html += '<div class="cmpfoot">'+(diffs ? diffs+' difference'+(diffs===1?'':'s') : 'Identical specs')+' · <button class="cmplink" data-cmpset="'+esc(pnB)+'">use '+esc(pnB)+' as the base</button> · <button class="cmplink" data-cmpclear="1">stop comparing</button></div>';
+  return html + '</div>';
 }
 
 function renderFail(res, q){
@@ -116,9 +187,13 @@ function renderHist(){
     + (history.length ? '<button data-histclear="1" style="color:var(--warn)">✕ clear</button>' : '');
 }
 renderHist();
+renderCompareBar();
 
 document.addEventListener('click', e=>{
   if(e.target.closest('[data-histclear]')){ history=[]; saveHist(); renderHist(); return; }
+  const cs = e.target.closest('[data-cmpset]');
+  if(cs){ setCompare(cs.dataset.cmpset); render(); return; }
+  if(e.target.closest('[data-cmpclear]')){ setCompare(null); render(); return; }
   const b = e.target.closest('[data-pn]');
   if(b){ pnEl.value = b.dataset.pn; scanRaw = null; render(); window.scrollTo({top:0,behavior:'smooth'}); }
 });

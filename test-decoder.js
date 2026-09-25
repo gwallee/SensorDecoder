@@ -5,10 +5,11 @@
    to the expected number, (3) unlisted / partial inputs are left alone. */
 const fs = require('fs');
 const read = f => fs.readFileSync(__dirname + "/" + f, "utf8").replace(/^"use strict";\n/, "");
-const core = read("js/data.js") + "\n" + read("js/decoder.js");
+const core = read("js/data.js") + "\n" + read("js/decoder.js") + "\n" + read("js/companions.js")
+  + "\nlet CAT=null; function catalog(){ if(CAT) return CAT; CAT=[]; for(const pn of Array.from(KNOWN).sort()){ const r=decodePN(pn); if(r&&r.ok) CAT.push({pn,r}); } return CAT; }";
 const ex = read("js/scanner.js").match(/function extractCandidates\(text\)\{[\s\S]*?\n\}\n/);
 if(!ex) throw new Error("extractCandidates not found in js/scanner.js");
-const api = new Function(core + ex[0] + '\nreturn {KNOWN, decodePN, decodeFuzzy, suggestions, extractCandidates};')();
+const api = new Function(core + ex[0] + '\nreturn {KNOWN, decodePN, decodeFuzzy, suggestions, extractCandidates, companions, alternatives};')();
 
 let pass = 0, fail = 0;
 function check(name, ok, detail){ if(ok) pass++; else { fail++; console.log('FAIL', name, detail||''); } }
@@ -65,7 +66,22 @@ check('extract token', cands.includes('OS18VN6LV'), cands.join('|'));
 check('extract cable suffix', cands.includes('OS18VN6LVW/30'), cands.join('|'));
 check('extract ignores voltage', !cands.includes('10-30VDC') || true);
 
-// 6. speed: partial typing must stay snappy
+// 6. companions and cross-reference
+const cr = api.decodePN("QS18VN6RQ8");
+const cg = api.companions("QS18VN6RQ8", cr);
+const pairs = (cg.find(g=>g.title==="Pairs with")||{items:[]}).items.map(i=>i.pn);
+check("receiver pairs with emitter, same connector", pairs.includes("QS186EQ8"), pairs.join(","));
+check("QD model gets a cordset", cg.some(g=>g.title==="Cordset" && g.items[0].pn==="MQDC-406"), JSON.stringify(cg.map(g=>g.title)));
+const lv = api.companions("QS18VN6LV", api.decodePN("QS18VN6LV"));
+check("retro model needs a reflector", lv.some(g=>/Reflector/.test(g.title)), lv.map(g=>g.title).join(","));
+check("cable model gets no cordset", !lv.some(g=>g.title==="Cordset"));
+for(const g of cg.concat(lv)) for(const it of g.items) if(it.decode){ const r=api.decodePN(it.pn); check("pairing decodes "+it.pn, r&&r.ok, r&&r.msg); }
+const alt = api.alternatives("QS18VN6LV", api.decodePN("QS18VN6LV"));
+check("alternatives same family", alt.same.some(a=>a.pn==="QS18VP6LV"), alt.same.map(a=>a.pn).slice(0,5).join(","));
+check("alternatives other families", alt.other.some(a=>/^S18-2|^QS30|^Q20/.test(a.pn)), alt.other.map(a=>a.pn).slice(0,5).join(","));
+check("alternatives exclude self", !alt.same.some(a=>a.pn==="QS18VN6LV"));
+
+// 7. speed: partial typing must stay snappy
 const t0 = Date.now(); for(let i=0;i<50;i++) api.decodeFuzzy('QS18VN6LX'); const ms = (Date.now()-t0)/50;
 check('speed < 40 ms per decodeFuzzy', ms < 40, ms.toFixed(1)+' ms');
 
